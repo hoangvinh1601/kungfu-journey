@@ -173,6 +173,7 @@ textarea{resize:vertical;min-height:64px}
 .holdbar i{position:absolute;inset:0;width:0;background:linear-gradient(90deg,rgba(95,185,133,.5),var(--good))}
 .holdbar span{position:relative;display:block;text-align:center;font-size:13px;font-weight:600;line-height:26px}
 .guide-tag{position:absolute;left:14px;bottom:14px;background:rgba(21,17,15,.86);border:1px solid var(--gold);color:var(--gold);padding:6px 12px;border-radius:10px;font-size:14px;font-weight:600}
+.coach-tag{position:absolute;right:14px;top:56px;background:rgba(21,17,15,.86);border:1px solid #5fd68c;color:#9be8b8;padding:6px 12px;border-radius:10px;font-size:13px;font-weight:600;max-width:60%}
 .stage-actions{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
 .stage-actions label{display:flex;gap:8px;align-items:center;font-size:14px;color:var(--paper-dim)}
 .stage-actions select{width:auto}
@@ -366,6 +367,7 @@ textarea{resize:vertical;min-height:64px}
         </div>
         <div class="banner" id="pBanner" hidden></div>
         <div class="guide-tag" id="guideTag" hidden></div>
+        <div class="coach-tag" id="coachTag" hidden></div>
         <div class="holdbar" id="holdBar" hidden><i></i><span>Giữ tư thế</span></div>
         <div class="success" id="pSuccess" hidden><span class="han">好</span><b>Đạt!</b></div>
         <div class="countdown" id="pCount" hidden></div>
@@ -1366,7 +1368,7 @@ function setStep(i){
   const L = lessonById(S.lessonId);
   S.step = clamp(i, 0, L.steps.length-1);
   Object.assign(P, { hold:0, passed:false, score:0, saidHold:false, lastMsg:'', refT:0 });
-  clearTimeout(P.nextT); $('#pSuccess').hidden = true;
+  clearTimeout(P.nextT); $('#pSuccess').hidden = true; P.wrongFor = 0;
   renderPractice();
   if(P.camOn) say(`Bước ${S.step+1}. ${L.steps[S.step].name}`);
 }
@@ -1554,15 +1556,16 @@ function solveArm(S, a, b, T, pole){
   return { E, W };
 }
 /* Renders the coach. contact = { from:[px], to:[px] } on the student's body; t animates from -> to. */
-function renderCoach(video, user2, show, contact, dt){
+function renderCoach(video, user2, show, contact, dt, demo3){
   ensureGhost();
   if(!GH.ok) return;
   const cv = GH.renderer.domElement;
-  const canShow = !!(show && user2 && contact);
+  const canShow = !!(show && user2 && (contact || demo3));
   GH.opacity += ((canShow ? .55 : 0) - GH.opacity) * Math.min(1, dt*5);
-  if(canShow) GH.lastContact = contact;
-  const ct = GH.lastContact;
-  if((!canShow && GH.opacity < .03) || !user2 || !ct){ cv.style.opacity = 0; if(!canShow) GH.t = 0; return; }
+  if(canShow){ GH.lastContact = contact || null; GH.lastDemo = contact ? null : demo3; }
+  const ct = GH.lastContact, demo = GH.lastDemo;
+  GH.handNow = null;
+  if((!canShow && GH.opacity < .03) || !user2 || (!ct && !demo)){ cv.style.opacity = 0; if(!canShow) GH.t = 0; return; }
   const W = video.videoWidth, H = video.videoHeight, asp = W/H;
   if(GH.size[0] !== W || GH.size[1] !== H){
     GH.renderer.setSize(Math.round(W/1.5), Math.round(H/1.5), false); GH.size = [W, H];
@@ -1574,9 +1577,9 @@ function renderCoach(video, user2, show, contact, dt){
   const ank = vis(user2,'la') && vis(user2,'ra') ? Math.max(g(user2,'la')[1], g(user2,'ra')[1]) : hip[1] + 2.2*dist(hip, sh);
   const hS = ank - sh[1];
   // stand just beyond the farthest point of the movement so the green target stays visible
-  let side = (ct.from[0] + ct.to[0])/2/H > hip[0] ? 1 : -1;
-  const far = Math.max(Math.abs(ct.from[0]/H - hip[0]), Math.abs(ct.to[0]/H - hip[0]));
-  const gap = clamp(far + .22*hS, .34*hS, 1.1*hS);
+  let side = ct ? ((ct.from[0] + ct.to[0])/2/H > hip[0] ? 1 : -1) : (hip[0] < asp/2 ? 1 : -1);
+  const far = ct ? Math.max(Math.abs(ct.from[0]/H - hip[0]), Math.abs(ct.to[0]/H - hip[0])) : .35*hS;
+  const gap = clamp(far + (ct ? .22 : .45)*hS, .34*hS, 1.1*hS);
   if(hip[0] + side*gap > asp - .12*hS || hip[0] + side*gap < .12*hS) side = -side;
   const yaw = side > 0 ? -1.05 : 1.05;
   let base = rotY(to3D(COACH_STAND), yaw);
@@ -1585,6 +1588,11 @@ function renderCoach(video, user2, show, contact, dt){
   const shA = wpos(b.lArm).add(wpos(b.rArm)).multiplyScalar(.5), footA = Math.min(...av.feet.map(f => wpos(f).y));
   const s = hS / Math.max(.1, shA.y - footA), hipA = wpos(b.lUpLeg).add(wpos(b.rUpLeg)).multiplyScalar(.5);
   gp.scale.setScalar(s); gp.position.set(hip[0] + side*gap - asp/2 - s*hipA.x, .5 - ank - s*footA, 0); gp.updateMatrixWorld(true);
+  if(!ct){   // demonstration: the master performs the correct pose next to the student, turned a little toward them
+    applyPose3D(rotY(demo, side > 0 ? -.45 : .45), av);
+    GH.mat.opacity = GH.opacity; cv.style.opacity = 1; GH.renderer.render(GH.scene, GH.cam);
+    return;
+  }
   // crouch when the limb to support is low (knees, feet), so the hand can actually reach it
   const reach = wpos(b.lFore).distanceTo(wpos(b.lArm)) + wpos(b.lHand).distanceTo(wpos(b.lFore));
   const shY = wpos(b.lArm).y, floorY = .5 - ank, lowY = .5 - Math.max(ct.from[1], ct.to[1])/H;
@@ -1627,15 +1635,24 @@ function drawTargets(ctx, targets, H, focus){
 }
 /* One frame of guidance: green targets for every wrong limb, the coach carries the worst one. */
 function guide(ctx, video, user2, errs, target3, show, dt){
-  const H = video.videoHeight, limbs = limbsFor(errs);
-  if(!show || !user2 || !lastWorld || !target3 || !limbs.length || !V3.ok){ renderCoach(video, user2, false, null, dt); return; }
-  const user3 = lastWorld.map(q => [q[0], -q[1], -q[2]]);
-  const targets = guideTargets(user2, user3, target3, limbs, H);
-  const worstLimb = (FEAT_LIMB[errs.find(e => FEAT_LIMB[e.f.id])?.f.id] || [limbs[0]])[0];
-  const w = targets.find(t => t.limb === worstLimb) || targets[0];
-  const contact = /Arm/.test(w.limb) ? (w.tip.ok ? w.tip : w.mid) : (w.mid.ok ? w.mid : w.tip);
-  renderCoach(video, user2, true, contact.ok ? contact : null, dt);
-  drawTargets(ctx, targets, H, w.limb);
+  const H = video.videoHeight, limbs = limbsFor(errs), tag = $('#coachTag');
+  if(!show || !user2 || !V3.ok || !target3){ renderCoach(video, user2, false, null, dt); tag.hidden = true; GH.why = !V3.ok ? '3d-not-ready' : !user2 ? 'no-person' : 'hidden'; return; }
+  let contact = null, targets = [], focus = null;
+  if(lastWorld && limbs.length){
+    targets = guideTargets(user2, lastWorld.map(q => [q[0], -q[1], -q[2]]), target3, limbs, H);
+    // carry the most important wrong limb that the camera can actually see
+    const order = [...new Set(errs.flatMap(e => FEAT_LIMB[e.f.id] || []))];
+    for(const l of order){
+      const w = targets.find(t => t.limb === l); if(!w) continue;
+      const c = /Arm/.test(l) ? (w.tip.ok ? w.tip : w.mid) : (w.mid.ok ? w.mid : w.tip);
+      if(c.ok){ contact = c; focus = l; break; }
+    }
+  }
+  renderCoach(video, user2, true, contact, dt, contact ? null : target3);
+  drawTargets(ctx, targets, H, focus);
+  GH.why = !GH.ok ? 'coach-loading' : contact ? 'guiding:' + focus : 'demo';
+  tag.hidden = !GH.ok || GH.opacity < .15;
+  tag.textContent = contact ? 'Võ sư đang đỡ: đưa ' + (/Arm/.test(focus) ? 'tay' : 'chân') + ' tới điểm xanh' : 'Làm theo võ sư đứng bên cạnh';
   if(GH.handNow && GH.opacity > .2){   // warm glow where the master's hand holds the limb
     const [hx, hy] = GH.handNow, gr = ctx.createRadialGradient(hx, hy, 0, hx, hy, H/16);
     gr.addColorStop(0, 'rgba(255,226,160,.55)'); gr.addColorStop(1, 'rgba(255,226,160,0)');
@@ -1657,6 +1674,7 @@ function practiceTick(now, dt){
     if(now >= P.countEnd + 500){ $('#pCount').hidden = true; P.state='running'; P.runStart = now; P.rec = []; P.lastRec = 0; P.guideStep = -1; renderPractice(); }
   }
   if(!P.camOn) return;
+  if(V3.ok && S.ghost) ensureGhost();
   const video = $('#pvideo');
   if(video.readyState < 2 || !landmarker){ setBanner('#pBanner', landmarker ? 'Đang mở camera…' : 'Đang tải mô hình AI…'); return; }
   if(video.currentTime === P.lastVT && P.state!=='running'){ return; }
@@ -1672,7 +1690,7 @@ function practiceTick(now, dt){
 function singleUpdate(L, pose, ctx, H, now, dt){
   const step = L.steps[S.step], issue = framingIssue(pose);
   const video = $('#pvideo');
-  if(!pose){ renderCoach(video, null, false, null, dt); setBanner('#pBanner', issue); P.hold = Math.max(0, P.hold - dt*2); updateHold(); if(now-P.lastUI>250){ setScoreUI(0,'Không thấy người',''); setFixes([], issue); P.lastUI=now; } return; }
+  if(!pose){ renderCoach(video, null, false, null, dt); $('#coachTag').hidden = true; setBanner('#pBanner', issue); P.hold = Math.max(0, P.hold - dt*2); updateHold(); if(now-P.lastUI>250){ setScoreUI(0,'Không thấy người',''); setFixes([], issue); P.lastUI=now; } return; }
   const r = comparePose(pose, step);
   P.score = P.score*0.7 + r.score*0.3;
   const errs = errorsOf(r.items);
@@ -1681,7 +1699,7 @@ function singleUpdate(L, pose, ctx, H, now, dt){
   // ghost master appears only while the pose is wrong and keeps guiding for a moment
   P.wrongFor = passing || P.passed ? 0 : (P.wrongFor || 0) + dt;
   drawUserOverlay(ctx, H, pose, state, r.items);
-  guide(ctx, video, pose, errs, L.world3[step.frame], S.ghost && !issue && P.wrongFor > .6, dt);
+  guide(ctx, video, pose, errs, L.world3[step.frame], S.ghost && P.wrongFor > 1.5, dt);
   setBanner('#pBanner', issue || (r.coverage < 0.6 ? 'Camera chưa thấy đủ các khớp quan trọng.' : r.wrongSide ? 'Ngược bên: làm giống hình trong gương' : null));
   if(!P.passed){
     P.hold = passing ? P.hold + dt : Math.max(0, P.hold - dt*1.5);
@@ -1740,13 +1758,14 @@ function fullUpdate(L, pose, ctx, H, now){
     if(pose){
       const r = compareFeats(features(pose), features(guide), L.steps[si].w), errs = errorsOf(r.items);
       drawUserOverlay(ctx, H, pose, r.score >= PASS ? 'good' : r.score >= 60 ? 'warn' : 'bad', r.items);
-      guide(ctx, $('#pvideo'), pose, errs, pose3DAt(L, Math.min(f, L.seqEnd)), S.ghost && !issue && r.score < 72, dtF);
+      P.wrongFull = r.score < 72 ? (P.wrongFull || 0) + dtF : 0;
+      guide(ctx, $('#pvideo'), pose, errs, pose3DAt(L, Math.min(f, L.seqEnd)), S.ghost && P.wrongFull > 1.2, dtF);
       if(now - P.lastUI > 150){ P.lastUI = now; setScoreUI(r.score, 'Đang ghi bài', 'warn'); setFixes([], 'Đang ghi. Tập theo nhịp mẫu, kết quả chi tiết hiện sau khi xong.'); }
     }
     setBanner('#pBanner', issue);
     if(f > L.seqEnd + 3*FPS*tempo()) finishFull();
   } else {
-    renderCoach($('#pvideo'), null, false, null, .05);
+    renderCoach($('#pvideo'), null, false, null, .05); $('#coachTag').hidden = true;
     if(pose) drawUserOverlay(ctx, H, pose, 'idle', []);
     setBanner('#pBanner', issue || (P.state==='idle' ? 'Vào vị trí rồi bấm “Bắt đầu cả bài”.' : null));
     if(P.state==='idle' && now - P.lastUI > 300){ P.lastUI = now; setScoreUI(0, 'Chờ bắt đầu', ''); setFixes([], 'Chế độ cả bài: tập liền mạch theo hình mẫu bên trái. Ứng dụng tự căn nhịp (DTW) nên tập chậm hơn mẫu vẫn được chấm đúng.'); }
