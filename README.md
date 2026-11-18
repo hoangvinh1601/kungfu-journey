@@ -7,7 +7,7 @@ App luyện võ trên trình duyệt. Học viên xem võ sư làm mẫu bằng 
 ## Tính năng
 
 - **Học động tác:** nhân vật 3D có khung xương, xoay 360°, có các góc nhìn sẵn (chính diện, chéo, ngang, sau lưng, từ trên), chế độ "Tập sau lưng thầy", đánh dấu khớp trọng tâm và hiện khung xương.
-- **Luyện từng động tác:** camera chấm điểm tư thế theo thời gian thực. Không vẽ khung xương lên người: thay vào đó là **viền phát sáng quanh cơ thể** (đỏ, vàng, xanh theo độ đúng) và vòng nhấp nháy ở khớp sai. Khi sai, **võ sư 3D mờ đứng cạnh** đặt tay vào đúng tay/chân đang sai rồi nâng, hạ, kéo về vị trí đúng (tự khom người khi cần đỡ đầu gối), và **điểm xanh** phát sáng đánh dấu chỗ bạn cần đưa tay chân tới. Giữ đúng 1,5 giây để qua bước.
+- **Luyện từng động tác:** camera chấm điểm tư thế theo thời gian thực. Không vẽ khung xương lên người: thay vào đó là **viền phát sáng quanh cơ thể** (đỏ, vàng, xanh theo độ đúng) và vòng nhấp nháy ở khớp sai. Khi sai quá 1,5 giây, một **bàn tay 3D nhỏ** xuất hiện ngay tại tay/chân đang sai, nắm lấy rồi nâng, hạ, kéo nó tới **điểm xanh** (chỗ bạn cần đưa tay chân tới), sau đó buông ra và lặp lại. Giữ đúng 1,5 giây để qua bước.
 - **Tự hiểu lật gương:** camera và võ sư 3D đều hiển thị như soi gương, nên bạn chỉ cần làm theo hình trên màn hình. App luôn chấm theo bên tay chân thật (tay phải của bạn = tay phải của thầy) và báo **"Ngược bên"** khi bạn dùng nhầm tay/chân. Khi xoay sang góc "Tập sau lưng thầy", hình tự bỏ soi gương.
 - **Luyện cả bài:** tập liên tục theo nhịp mẫu. App căn nhịp bằng DTW, chấm từng thức và chỉ ra thức yếu nhất.
 - **Võ sư:** quay trực tiếp hoặc tải video lên. App tách khung xương 2D và 3D, gợi ý các bước tự động, lưu bài và xuất/nhập file JSON.

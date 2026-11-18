@@ -395,7 +395,7 @@ textarea{resize:vertical;min-height:64px}
         <summary>Tuỳ chọn</summary>
         <div class="opts">
           <label><input type="checkbox" id="optVoice" checked> Nhắc lỗi bằng giọng nói</label>
-          <label><input type="checkbox" id="optGhost" checked> Võ sư 3D đứng cạnh hướng dẫn khi sai</label>
+          <label><input type="checkbox" id="optGhost" checked> Bàn tay 3D hướng dẫn khi sai</label>
           <label><input type="checkbox" id="optSkel"> Hiện khung xương (kỹ thuật)</label>
           <label><input type="checkbox" id="optAuto" checked> Đạt thì tự chuyển bước</label>
           <label>Mô hình AI <select id="optModel"><option value="lite">Nhẹ (điện thoại)</option><option value="full" selected>Đầy đủ (laptop)</option></select></label>
@@ -1470,34 +1470,47 @@ const LIMB_TIP = { lArm:['lHand','lw'], rArm:['rHand','rw'], lLeg:['lFoot','la']
 const FEAT_LIMB = { lElbow:['lArm'], lShoulder:['lArm'], rElbow:['rArm'], rShoulder:['rArm'], lHip:['lLeg'], lKnee:['lLeg'], rHip:['rLeg'], rKnee:['rLeg'], stance:['lLeg','rLeg'] };
 function limbsFor(errs){ return [...new Set(errs.filter(e => e.nd > 1).flatMap(e => FEAT_LIMB[e.f.id] || []))]; }
 
+/* Guide hand: a small translucent 3D hand built in code (no download), drawn in camera space. */
 function ensureGhost(){
-  if(!V3.ok || GH.loading) return;
-  if(GH.ok && GH.charId === V3.charId) return;
-  GH.loading = (async () => {
-    if(!GH.renderer){
-      const r = new T3.WebGLRenderer({ antialias:true, alpha:true });
-      r.setPixelRatio(1); r.outputColorSpace = T3.SRGBColorSpace;
-      r.domElement.className = 'ghost-canvas'; r.domElement.style.opacity = 0;
-      const box = $('#pStage .mirror-box'); box.insertBefore(r.domElement, $('#pcanvas'));
-      const scene = new T3.Scene();
-      scene.add(new T3.HemisphereLight(0xfff4e0, 0x553311, 2.4));
-      const d = new T3.DirectionalLight(0xffffff, 1.6); d.position.set(.6, 1, 2); scene.add(d);
-      const cam = new T3.OrthographicCamera(-.5, .5, .5, -.5, -20, 20); cam.position.z = 10;
-      const group = new T3.Group(); scene.add(group);
-      Object.assign(GH, { renderer:r, scene, cam, group });
-    }
-    const want = V3.charId, gltf = await loadCharGLTF(want);
-    const av = buildAvatar(gltf.scene); if(!av.root) throw new Error('ghost rig');
-    const mat = new T3.MeshStandardMaterial({ color:0xf6d48a, emissive:0xd9a54a, emissiveIntensity:.6, roughness:.35, metalness:.1, transparent:true, opacity:0 });
-    av.root.traverse(o => {
-      if(!o.isMesh) return;
-      o.castShadow = false;
-      if(/brow|lash|hair|short0|long0|ponytail|bob0|braid|afro/i.test(o.name + ' ' + [].concat(o.material).map(m => m.name).join(' '))) o.visible = false;
-      o.material = mat;
-    });
-    if(GH.avatar) GH.group.remove(GH.avatar.root);
-    GH.group.add(av.root); Object.assign(GH, { avatar:av, mat, charId:want, ok:true });
-  })().catch(e => { console.warn('ghost', e); GH.charId = V3.charId; }).finally(() => { GH.loading = null; });
+  if(GH.ok || !T3) return;
+  const r = new T3.WebGLRenderer({ antialias:true, alpha:true });
+  r.setPixelRatio(1); r.outputColorSpace = T3.SRGBColorSpace; r.toneMapping = T3.ACESFilmicToneMapping;
+  r.domElement.className = 'ghost-canvas'; r.domElement.style.opacity = 0;
+  $('#pStage .mirror-box').insertBefore(r.domElement, $('#pcanvas'));
+  const scene = new T3.Scene();
+  scene.add(new T3.HemisphereLight(0xfff6e6, 0x6b4a2a, 2.2));
+  const key = new T3.DirectionalLight(0xffffff, 2.2); key.position.set(-.6, 1.2, 2); scene.add(key);
+  const rim = new T3.DirectionalLight(0xffd27a, 1.4); rim.position.set(1, -.4, -1.5); scene.add(rim);
+  const cam = new T3.OrthographicCamera(-.5, .5, .5, -.5, -20, 20); cam.position.z = 10;
+  const mat = new T3.MeshPhysicalMaterial({ color:0xffeccc, emissive:0xe0a84a, emissiveIntensity:.35, roughness:.38, clearcoat:.7, clearcoatRoughness:.3, transparent:true, opacity:0 });
+  const hand = new T3.Group(), joints = [];
+  const seg = (parent, len, rad) => {             // one phalanx: pivot at its base, rounded knuckle, child pivot near its tip
+    const pv = new T3.Group(); parent.add(pv);
+    const m = new T3.Mesh(new T3.CapsuleGeometry(rad, Math.max(.001, len - rad), 8, 16), mat); m.position.y = len/2; m.scale.z = .85; pv.add(m);
+    const tip = new T3.Group(); tip.position.y = len*.94; pv.add(tip);
+    return { pv, tip };
+  };
+  // unit hand (wrist to middle fingertip = 1): fingers along +Y, palm facing +Z
+  const palm = new T3.Mesh(new T3.CapsuleGeometry(.19, .16, 10, 24), mat); palm.scale.set(1.12, 1, .4); palm.position.y = .27; hand.add(palm);
+  const heel = new T3.Mesh(new T3.SphereGeometry(.17, 20, 14), mat); heel.scale.set(1.05, .7, .45); heel.position.set(.05, .1, .01); hand.add(heel);
+  const wrist = new T3.Mesh(new T3.CapsuleGeometry(.13, .1, 8, 18), mat); wrist.scale.z = .62; wrist.position.y = -.04; hand.add(wrist);
+  // index, middle, ring, little: base x, base y, phalanx lengths, radius
+  [[-.135, .5, [.2, .12, .09], .052], [-.045, .52, [.22, .14, .1], .054], [.045, .51, [.21, .13, .095], .051], [.13, .47, [.16, .1, .08], .045]].forEach(([x, y, lens, rad]) => {
+    const base = new T3.Group(); base.position.set(x, y, .005); base.rotation.z = -x*.25; hand.add(base);
+    const knuckle = new T3.Mesh(new T3.SphereGeometry(rad*1.08, 16, 12), mat); knuckle.scale.z = .85; base.add(knuckle);
+    let at = base, chain = [];
+    lens.forEach(L => { const sg = seg(at, L, rad); chain.push(sg.pv); at = sg.tip; });
+    joints.push({ chain, k:[.95, 1.15, .85] });
+  });
+  const tb = new T3.Group(); tb.position.set(-.17, .16, .05); tb.rotation.set(.5, -.2, .78); hand.add(tb);
+  const tmeta = new T3.Mesh(new T3.SphereGeometry(.075, 16, 12), mat); tmeta.scale.set(1, 1.4, .8); tb.add(tmeta);
+  let at = tb; const tchain = []; [.14, .11, .085].forEach(L => { const sg = seg(at, L, .058); tchain.push(sg.pv); at = sg.tip; });
+  joints.push({ chain:tchain, k:[.2, .5, .45], thumb:true });
+  scene.add(hand); hand.visible = false;
+  Object.assign(GH, { renderer:r, scene, cam, hand, mat, joints, ok:true });
+}
+function curlHand(c){
+  for(const j of GH.joints) j.chain.forEach((pv, i) => { if(j.thumb) pv.rotation.x = c*j.k[i]*.9; else pv.rotation.x = c*j.k[i]; });
 }
 function bodyBasis(p){
   const V = k => new T3.Vector3(...p[KI[k]]);
@@ -1519,11 +1532,6 @@ function guidePose(user3, target3, limbs, t){
   }
   return out;
 }
-/* ---- side coach: a translucent master standing next to the student, whose hand carries the wrong limb ---- */
-const COACH_STAND = mk({ nose:[.5,.12,.02], ls:[.58,.25], rs:[.42,.25], le:[.6,.38], re:[.4,.38], lw:[.59,.5,.02], rw:[.41,.5,.02],
-  lh:[.555,.52], rh:[.445,.52], lk:[.56,.72,.02], rk:[.44,.72,.02], la:[.565,.92], ra:[.435,.92] });
-const COACH_CROUCH = mk({ nose:[.5,.31,.12], ls:[.58,.43,.06], rs:[.42,.43,.06], le:[.6,.56,.06], re:[.4,.56,.06], lw:[.59,.66,.1], rw:[.41,.66,.1],
-  lh:[.555,.68,-.06], rh:[.445,.68,-.06], lk:[.565,.76,.16], rk:[.435,.76,.16], la:[.565,.92], ra:[.435,.92] });
 const LIMB_MID = { lArm:'le', rArm:'re', lLeg:'lk', rLeg:'rk' };
 const LIMB_ROOT = { lArm:'ls', rArm:'rs', lLeg:'lh', rLeg:'rh' };
 
@@ -1541,79 +1549,43 @@ function guideTargets(user2, user3, target3, limbs, H){
     return { limb:l, tip:{ from:P2(tipK), to:proj(root, tipK), ok: g(user2,tipK)[2] >= VIS }, mid:{ from:P2(midK), to:proj(root, midK), ok: g(user2,midK)[2] >= VIS } };
   });
 }
-function rotY(p, ang){
-  const c = Math.cos(ang), s_ = Math.sin(ang), hx = (p[KI.lh][0]+p[KI.rh][0])/2, hz = (p[KI.lh][2]+p[KI.rh][2])/2;
-  return p.map(q => [hx + (q[0]-hx)*c + (q[2]-hz)*s_, q[1], hz - (q[0]-hx)*s_ + (q[2]-hz)*c]);
-}
-/* two-bone IK: shoulder S, upper/lower lengths a, b, target T, elbow pole direction */
-function solveArm(S, a, b, T, pole){
-  const v = T.clone().sub(S); let d = v.length(); const dir = v.normalize();
-  d = clamp(d, Math.abs(a-b) + 1e-3, a + b - 1e-3);
-  const ca = clamp((a*a + d*d - b*b)/(2*a*d), -1, 1), sa = Math.sqrt(1 - ca*ca);
-  const pn = pole.clone().sub(dir.clone().multiplyScalar(pole.dot(dir))).normalize();
-  const E = S.clone().addScaledVector(dir, a*ca).addScaledVector(pn, a*sa);
-  const W = S.clone().addScaledVector(dir, d);
-  return { E, W };
-}
-/* Renders the coach. contact = { from:[px], to:[px] } on the student's body; t animates from -> to. */
-function renderCoach(video, user2, show, contact, dt, demo3){
+/* The hand takes hold of the student's limb, carries it to the green target, lets go, and repeats. */
+function renderHand(video, user2, show, contact, dt){
   ensureGhost();
   if(!GH.ok) return;
-  const cv = GH.renderer.domElement;
-  const canShow = !!(show && user2 && (contact || demo3));
-  GH.opacity += ((canShow ? .55 : 0) - GH.opacity) * Math.min(1, dt*5);
-  if(canShow){ GH.lastContact = contact || null; GH.lastDemo = contact ? null : demo3; }
-  const ct = GH.lastContact, demo = GH.lastDemo;
-  GH.handNow = null;
-  if((!canShow && GH.opacity < .03) || !user2 || (!ct && !demo)){ cv.style.opacity = 0; if(!canShow) GH.t = 0; return; }
+  const cv = GH.renderer.domElement, canShow = !!(show && user2 && contact);
+  GH.opacity += ((canShow ? 1 : 0) - GH.opacity) * Math.min(1, dt*6);
+  if(canShow) GH.lastContact = contact;
+  const ct = GH.lastContact; GH.handNow = null;
+  if((!canShow && GH.opacity < .03) || !user2 || !ct){ cv.style.opacity = 0; GH.hand.visible = false; if(!canShow) GH.t = 0; return; }
   const W = video.videoWidth, H = video.videoHeight, asp = W/H;
   if(GH.size[0] !== W || GH.size[1] !== H){
-    GH.renderer.setSize(Math.round(W/1.5), Math.round(H/1.5), false); GH.size = [W, H];
+    GH.renderer.setSize(Math.round(W/1.25), Math.round(H/1.25), false); GH.size = [W, H];
     Object.assign(GH.cam, { left:-asp/2, right:asp/2, top:.5, bottom:-.5 }); GH.cam.updateProjectionMatrix();
   }
-  const av = GH.avatar, b = av.b, gp = GH.group;
-  // stand beside the student, on the side of the limb being corrected, turned toward them
-  const hip = mid(g(user2,'lh'), g(user2,'rh')), sh = mid(g(user2,'ls'), g(user2,'rs'));
-  const ank = vis(user2,'la') && vis(user2,'ra') ? Math.max(g(user2,'la')[1], g(user2,'ra')[1]) : hip[1] + 2.2*dist(hip, sh);
-  const hS = ank - sh[1];
-  // stand just beyond the farthest point of the movement so the green target stays visible
-  let side = ct ? ((ct.from[0] + ct.to[0])/2/H > hip[0] ? 1 : -1) : (hip[0] < asp/2 ? 1 : -1);
-  const far = ct ? Math.max(Math.abs(ct.from[0]/H - hip[0]), Math.abs(ct.to[0]/H - hip[0])) : .35*hS;
-  const gap = clamp(far + (ct ? .22 : .45)*hS, .34*hS, 1.1*hS);
-  if(hip[0] + side*gap > asp - .12*hS || hip[0] + side*gap < .12*hS) side = -side;
-  const yaw = side > 0 ? -1.05 : 1.05;
-  let base = rotY(to3D(COACH_STAND), yaw);
-  gp.position.set(0,0,0); gp.scale.setScalar(1); gp.updateMatrixWorld(true);
-  applyPose3D(base, av);
-  const shA = wpos(b.lArm).add(wpos(b.rArm)).multiplyScalar(.5), footA = Math.min(...av.feet.map(f => wpos(f).y));
-  const s = hS / Math.max(.1, shA.y - footA), hipA = wpos(b.lUpLeg).add(wpos(b.rUpLeg)).multiplyScalar(.5);
-  gp.scale.setScalar(s); gp.position.set(hip[0] + side*gap - asp/2 - s*hipA.x, .5 - ank - s*footA, 0); gp.updateMatrixWorld(true);
-  if(!ct){   // demonstration: the master performs the correct pose next to the student, turned a little toward them
-    applyPose3D(rotY(demo, side > 0 ? -.45 : .45), av);
-    GH.mat.opacity = GH.opacity; cv.style.opacity = 1; GH.renderer.render(GH.scene, GH.cam);
-    return;
-  }
-  // crouch when the limb to support is low (knees, feet), so the hand can actually reach it
-  const reach = wpos(b.lFore).distanceTo(wpos(b.lArm)) + wpos(b.lHand).distanceTo(wpos(b.lFore));
-  const shY = wpos(b.lArm).y, floorY = .5 - ank, lowY = .5 - Math.max(ct.from[1], ct.to[1])/H;
-  const k = clamp(((shY - lowY) - .8*reach) / Math.max(.05, .27*(shY - floorY)), 0, .75);
-  if(k > .01){ base = rotY(to3D(lerpPose(COACH_STAND, COACH_CROUCH, k)), yaw); applyPose3D(base, av); }
-  // the hand nearer to the student reaches the contact point and carries it to the target
-  GH.t += dt; const cyc = GH.t % 2.2, tt = cyc < .45 ? 0 : ease(Math.min(1, (cyc - .45)/1.1));
-  const cx = ct.from[0] + (ct.to[0]-ct.from[0])*tt, cy = ct.from[1] + (ct.to[1]-ct.from[1])*tt;
-  const useLeft = Math.abs(wpos(b.lArm).x - (hip[0]-asp/2)) < Math.abs(wpos(b.rArm).x - (hip[0]-asp/2));
-  const [kS, kE, kW, bS, bE, bW] = useLeft ? ['ls','le','lw', b.lArm, b.lFore, b.lHand] : ['rs','re','rw', b.rArm, b.rFore, b.rHand];
-  const S_ = wpos(bS), la = wpos(bE).distanceTo(S_), lb = wpos(bW).distanceTo(wpos(bE));
-  const T = new T3.Vector3(cx/H - asp/2, .5 - cy/H, S_.z);
-  const { E, W: Wp } = solveArm(S_, la, lb, T, new T3.Vector3(0, -1, -.3));
-  const pts = base.map(q => q.slice());
-  const add = (k, from, v) => { pts[KI[k]] = [pts[KI[from]][0] + v.x, pts[KI[from]][1] + v.y, pts[KI[from]][2] + v.z]; };
-  add(kE, kS, E.clone().sub(S_)); add(kW, kE, Wp.clone().sub(E));
-  applyPose3D(pts, av);
-  GH.mat.opacity = GH.opacity; cv.style.opacity = 1;
+  // timeline: appear open (0-.35s), grip and carry (.35-1.45s), hold at target (-1.9s), release and fade (-2.3s)
+  GH.t += dt; const c = GH.t % 2.3;
+  const move = ease(clamp((c - .35)/1.1, 0, 1));
+  const grip = c < .35 ? c/.35*.55 : c < 1.9 ? .55 + .25*Math.min(1, (c - .35)/.3) : .8*(1 - (c - 1.9)/.4);
+  const fade = c < .25 ? c/.25 : c > 1.95 ? Math.max(0, 1 - (c - 1.95)/.35) : 1;
+  const px = ct.from[0] + (ct.to[0] - ct.from[0])*move, py = ct.from[1] + (ct.to[1] - ct.from[1])*move;
+  // orient: palm pushes along the movement, fingers wrap across it, tilted so the camera sees the palm
+  let d = new T3.Vector3(ct.to[0] - ct.from[0], -(ct.to[1] - ct.from[1]), 0);
+  if(d.lengthSq() < 1e-6) d.set(0, 1, 0);
+  d.normalize();
+  let y = new T3.Vector3(-d.y, d.x, 0); if(y.y < 0) y.negate();
+  const z = d.clone(), x = new T3.Vector3().crossVectors(y, z).normalize();
+  const q = new T3.Quaternion().setFromRotationMatrix(new T3.Matrix4().makeBasis(x, y, z));
+  q.premultiply(new T3.Quaternion().setFromAxisAngle(d, -.75));          // 3/4 view
+  const size = (GH.sizeK || .8)*dist(mid(g(user2,'lh'), g(user2,'rh')), mid(g(user2,'ls'), g(user2,'rs')));
+  const h = GH.hand; h.visible = true; h.quaternion.copy(q); h.scale.setScalar(size);
+  // the palm sits just behind the limb (opposite to the push), fingers reaching around it
+  const palmC = new T3.Vector3(0, .26, 0).applyQuaternion(q).multiplyScalar(size);
+  h.position.set(px/H - asp/2 - palmC.x - d.x*size*.16, .5 - py/H - palmC.y - d.y*size*.16, 0);
+  curlHand(grip);
+  GH.mat.opacity = .92*fade*GH.opacity; cv.style.opacity = 1;
   GH.renderer.render(GH.scene, GH.cam);
-  const hw = wpos(useLeft ? b.lHand : b.rHand);
-  GH.handNow = [(hw.x + asp/2)*H, (.5 - hw.y)*H];
+  GH.handNow = [px, py]; GH.handA = fade*GH.opacity;
 }
 /* Green target dots where the student should move the limb, with a faint path from where it is now. */
 function drawTargets(ctx, targets, H, focus){
@@ -1636,27 +1608,28 @@ function drawTargets(ctx, targets, H, focus){
 /* One frame of guidance: green targets for every wrong limb, the coach carries the worst one. */
 function guide(ctx, video, user2, errs, target3, show, dt){
   const H = video.videoHeight, limbs = limbsFor(errs), tag = $('#coachTag');
-  if(!show || !user2 || !V3.ok || !target3){ renderCoach(video, user2, false, null, dt); tag.hidden = true; GH.why = !V3.ok ? '3d-not-ready' : !user2 ? 'no-person' : 'hidden'; return; }
+  if(!show || !user2 || !V3.ok || !target3){ renderHand(video, user2, false, null, dt); tag.hidden = true; GH.why = !V3.ok ? '3d-not-ready' : !user2 ? 'no-person' : 'hidden'; return; }
   let contact = null, targets = [], focus = null;
   if(lastWorld && limbs.length){
     targets = guideTargets(user2, lastWorld.map(q => [q[0], -q[1], -q[2]]), target3, limbs, H);
-    // carry the most important wrong limb that the camera can actually see
+    // carry the most important wrong limb the camera can see: hand -> wrist for arms, knee/ankle for legs
     const order = [...new Set(errs.flatMap(e => FEAT_LIMB[e.f.id] || []))];
     for(const l of order){
       const w = targets.find(t => t.limb === l); if(!w) continue;
-      const c = /Arm/.test(l) ? (w.tip.ok ? w.tip : w.mid) : (w.mid.ok ? w.mid : w.tip);
-      if(c.ok){ contact = c; focus = l; break; }
+      const opts = /Arm/.test(l) ? [w.tip, w.mid] : [w.mid, w.tip];
+      const c = opts.find(o => o.ok && Math.hypot(o.to[0]-o.from[0], o.to[1]-o.from[1]) > H*.03);
+      if(c){ contact = c; focus = l; break; }
     }
   }
-  renderCoach(video, user2, true, contact, dt, contact ? null : target3);
+  renderHand(video, user2, true, contact, dt);
   drawTargets(ctx, targets, H, focus);
-  GH.why = !GH.ok ? 'coach-loading' : contact ? 'guiding:' + focus : 'demo';
-  tag.hidden = !GH.ok || GH.opacity < .15;
-  tag.textContent = contact ? 'Võ sư đang đỡ: đưa ' + (/Arm/.test(focus) ? 'tay' : 'chân') + ' tới điểm xanh' : 'Làm theo võ sư đứng bên cạnh';
-  if(GH.handNow && GH.opacity > .2){   // warm glow where the master's hand holds the limb
-    const [hx, hy] = GH.handNow, gr = ctx.createRadialGradient(hx, hy, 0, hx, hy, H/16);
-    gr.addColorStop(0, 'rgba(255,226,160,.55)'); gr.addColorStop(1, 'rgba(255,226,160,0)');
-    ctx.save(); ctx.fillStyle = gr; ctx.beginPath(); ctx.arc(hx, hy, H/16, 0, 7); ctx.fill(); ctx.restore();
+  GH.why = !GH.ok ? 'hand-loading' : contact ? 'guiding:' + focus : 'no-visible-limb';
+  tag.hidden = !(GH.ok && contact && GH.opacity > .15) && !(targets.length && !contact);
+  tag.textContent = contact ? 'Theo bàn tay: đưa ' + (/Arm/.test(focus) ? 'tay' : 'chân') + ' tới điểm xanh' : 'Chỉnh theo điểm xanh và hình mẫu bên trái';
+  if(GH.handNow && GH.handA > .2){   // soft light under the guiding hand
+    const [hx, hy] = GH.handNow, R = H/14, gr = ctx.createRadialGradient(hx, hy, 0, hx, hy, R);
+    gr.addColorStop(0, `rgba(255,226,160,${.45*GH.handA})`); gr.addColorStop(1, 'rgba(255,226,160,0)');
+    ctx.save(); ctx.fillStyle = gr; ctx.beginPath(); ctx.arc(hx, hy, R, 0, 7); ctx.fill(); ctx.restore();
   }
 }
 
@@ -1690,7 +1663,7 @@ function practiceTick(now, dt){
 function singleUpdate(L, pose, ctx, H, now, dt){
   const step = L.steps[S.step], issue = framingIssue(pose);
   const video = $('#pvideo');
-  if(!pose){ renderCoach(video, null, false, null, dt); $('#coachTag').hidden = true; setBanner('#pBanner', issue); P.hold = Math.max(0, P.hold - dt*2); updateHold(); if(now-P.lastUI>250){ setScoreUI(0,'Không thấy người',''); setFixes([], issue); P.lastUI=now; } return; }
+  if(!pose){ renderHand(video, null, false, null, dt); $('#coachTag').hidden = true; setBanner('#pBanner', issue); P.hold = Math.max(0, P.hold - dt*2); updateHold(); if(now-P.lastUI>250){ setScoreUI(0,'Không thấy người',''); setFixes([], issue); P.lastUI=now; } return; }
   const r = comparePose(pose, step);
   P.score = P.score*0.7 + r.score*0.3;
   const errs = errorsOf(r.items);
@@ -1765,7 +1738,7 @@ function fullUpdate(L, pose, ctx, H, now){
     setBanner('#pBanner', issue);
     if(f > L.seqEnd + 3*FPS*tempo()) finishFull();
   } else {
-    renderCoach($('#pvideo'), null, false, null, .05); $('#coachTag').hidden = true;
+    renderHand($('#pvideo'), null, false, null, .05); $('#coachTag').hidden = true;
     if(pose) drawUserOverlay(ctx, H, pose, 'idle', []);
     setBanner('#pBanner', issue || (P.state==='idle' ? 'Vào vị trí rồi bấm “Bắt đầu cả bài”.' : null));
     if(P.state==='idle' && now - P.lastUI > 300){ P.lastUI = now; setScoreUI(0, 'Chờ bắt đầu', ''); setFixes([], 'Chế độ cả bài: tập liền mạch theo hình mẫu bên trái. Ứng dụng tự căn nhịp (DTW) nên tập chậm hơn mẫu vẫn được chấm đúng.'); }
