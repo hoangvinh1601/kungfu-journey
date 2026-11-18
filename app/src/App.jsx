@@ -13,6 +13,10 @@ import MasterApply from './pages/MasterApply.jsx';
 import Admin from './pages/Admin.jsx';
 import Login from './pages/Login.jsx';
 import Settings from './pages/Settings.jsx';
+import Messages from './pages/Messages.jsx';
+import Train from './pages/Train.jsx';
+import Room from './pages/Room.jsx';
+import { LiveProvider } from './components/Calls.jsx';
 
 const ENGINE_VIEWS = { '/':'home', '/learn':'learn', '/practice':'practice', '/studio':'studio' };
 
@@ -38,7 +42,10 @@ export default function App(){
   authRef.current = auth;
   const [lessons, setLessons] = useState([]);
   const [pendingShare, setPendingShare] = useState(null);
-  const view = ENGINE_VIEWS[loc.pathname];
+  const isRoom = loc.pathname.startsWith('/room/');
+  const view = isRoom ? 'practice' : ENGINE_VIEWS[loc.pathname];
+  const roomHooks = useRef({});
+  const call = (k, ...a) => { const f = roomHooks.current[k]; if(f) try{ f(...a); }catch(e){ console.warn(e); } };
 
   const loadLessons = useCallback(async () => {
     const rows = await api.listLessons().catch(e => { console.warn(e); return []; });
@@ -50,6 +57,13 @@ export default function App(){
   useEffect(() => {
     engine.current = initEngine(engRef.current, {
       navigate: v => nav(v === 'home' ? '/' : '/' + v),
+      onLive: info => call('onLive', info),
+      onStep: info => call('onStep', info),
+      onFullResult: r => call('onFullResult', r),
+      contact: async username => {
+        if(!authRef.current.me){ nav('/login?next=' + encodeURIComponent('/u/' + username)); return; }
+        try{ const p = await api.getProfileByUsername(username); const c = await api.startDM(p.id); nav('/messages/' + c); }catch(e){ toast(e.message); }
+      },
       canPublish: () => !!authRef.current.profile?.master_verified,
       publishLesson: async def => { await api.publishLesson(authRef.current.me, def); await loadLessons(); },
       onProgress: (lessonId, patch) => {
@@ -73,10 +87,12 @@ export default function App(){
   useEffect(() => {
     if(!engine.current) return;
     const q = new URLSearchParams(loc.search);
+    if(isRoom){ window.scrollTo({ top:0 }); return; }   // the room drives the engine itself
     if(view) engine.current.show(view, { lessonId:q.get('lesson') || undefined, mode:q.get('mode') || undefined });
     else engine.current.show('none');
     window.scrollTo({ top:0 });
-  }, [view, loc.search]);
+  }, [view, loc.search, isRoom]);
+  useEffect(() => { if(isRoom && engine.current) engine.current.show('practice'); }, [isRoom]);
 
   // progress: merge this device's progress with the account's
   useEffect(() => {
@@ -87,10 +103,12 @@ export default function App(){
   }, [me]);
   useEffect(() => { engine.current && engine.current.refresh(); }, [profile?.master_verified]);
 
-  return <>
+  const share = s => { setPendingShare(s); nav('/feed'); toast('Viết thêm vài dòng rồi bấm Đăng.'); };
+  return <LiveProvider>
     <Header />
     {api.mode === 'demo' && <div className="demo-bar">Chế độ demo: dữ liệu chỉ lưu trên trình duyệt này.</div>}
-    <main>
+    <main className={isRoom ? 'room-main' : ''}>
+      {isRoom && <Routes><Route path="/room/:id" element={<Room engine={engine} roomHooks={roomHooks} lessons={lessons} onShare={share} />} /></Routes>}
       <div ref={engRef} className="engine-root" style={{ display: view ? '' : 'none' }} />
       {!view && <Routes>
         <Route path="/feed" element={<Feed lessons={lessons} pendingShare={pendingShare} clearShare={() => setPendingShare(null)} />} />
@@ -101,10 +119,13 @@ export default function App(){
         <Route path="/admin" element={<Admin />} />
         <Route path="/login" element={<Login />} />
         <Route path="/settings" element={<Settings />} />
+        <Route path="/messages" element={<Messages lessons={lessons} />} />
+        <Route path="/messages/:id" element={<Messages lessons={lessons} />} />
+        <Route path="/train" element={<Train lessons={lessons} />} />
         <Route path="*" element={<div className="empty">Không tìm thấy trang.</div>} />
       </Routes>}
     </main>
     <footer className="foot"><span>© {new Date().getFullYear()} Kungfu Journey</span><span>Võ thuật · sắp có Yoga, Cầu lông, Bóng chuyền, Bóng đá</span></footer>
     <Toaster />
-  </>;
+  </LiveProvider>;
 }

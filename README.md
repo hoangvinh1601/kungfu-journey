@@ -13,14 +13,20 @@ Nền tảng học võ trên web: học với võ sư 3D, luyện tập có came
 - **Quay video buổi tập:** quay camera kèm viền, bàn tay hướng dẫn và điểm xanh (tối đa 30 giây), đăng thẳng lên cộng đồng.
 - **Quản trị:** duyệt hồ sơ võ sư, xử lý bài bị báo cáo.
 
-## Giai đoạn 2 (kế tiếp)
+## Giai đoạn 2
 
-Chat và gọi video với võ sư của bài, phòng tập chung, thi đấu với màn hình chia đôi.
+- **Tin nhắn:** chat 1–1 với võ sư (nút “Liên hệ võ sư” trên trang cá nhân hoặc “Hỏi võ sư” trong bài của võ sư), báo tin mới.
+- **Gọi video:** gọi trực tiếp trong trang tin nhắn, có chuông báo cuộc gọi đến, tắt/mở micro và camera.
+- **Tập chung:** hai người cùng một bài, màn hình chia đôi, thấy camera và điểm của nhau. Chủ phòng chọn thức, người kia tự theo.
+- **Thi đấu:** cả hai tập cả bài cùng lúc, ai điểm cao hơn thắng; kết quả lưu lại và đăng được lên cộng đồng.
+- **Hẹn tập:** tạo phòng có giờ hẹn, gửi link hoặc mời thẳng trong tin nhắn.
+
+Video đi trực tiếp giữa hai máy (WebRTC). Nếu hai bên ở sau mạng công ty chặn kết nối, cần thêm máy chủ TURN: đặt `VITE_TURN_URL`, `VITE_TURN_USER`, `VITE_TURN_PASS` trong `app/.env` rồi build lại.
 
 ## Cấu trúc
 
 - `app/`: mã nguồn (Vite + React). `app/src/engine/` là engine luyện tập (MediaPipe, three.js, chấm điểm, studio).
-- `supabase/schema.sql`: cơ sở dữ liệu, phân quyền (RLS), kho lưu trữ. Chạy trong Supabase → SQL Editor.
+- `supabase/schema.sql`, `supabase/phase2.sql`: cơ sở dữ liệu, phân quyền (RLS), kho lưu trữ, kênh realtime riêng tư. Chạy lần lượt trong Supabase → SQL Editor.
 - `index.html`, `assets/`: bản build cho GitHub Pages (`cd app && npm install && npm run build`).
 - `models/`, `blender/`: nhân vật 3D và script dựng nhân vật.
 

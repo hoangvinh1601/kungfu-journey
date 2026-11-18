@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import { api } from '../lib/api.js';
 import { useAuth } from '../lib/auth.jsx';
 import PostCard from '../components/PostCard.jsx';
@@ -8,7 +8,7 @@ import { Avatar, Badges, Empty, Spinner, toast } from '../components/ui.jsx';
 function masteryLevel(done, total){ if(!done) return ['Chưa luyện', '']; if(done >= total) return ['Thuần thục', 'good']; return ['Đang luyện', 'warn']; }
 
 export default function Profile({ lessons }){
-  const { username } = useParams(); const { me } = useAuth();
+  const { username } = useParams(); const { me } = useAuth(); const nav = useNavigate();
   const [p, setP] = useState(undefined), [counts, setCounts] = useState(null), [following, setFollowing] = useState(false);
   const [posts, setPosts] = useState(null), [liked, setLiked] = useState(new Set()), [prog, setProg] = useState({}), [tab, setTab] = useState('posts');
   useEffect(() => { (async () => {
@@ -21,6 +21,10 @@ export default function Profile({ lessons }){
   })(); }, [username, me]);
   if(p === undefined) return <Spinner />;
   if(!p) return <Empty>Không tìm thấy người dùng @{username}.</Empty>;
+  const contact = async () => {
+    if(!me){ nav('/login?next=' + encodeURIComponent('/u/' + p.username)); return; }
+    try{ const c = await api.startDM(p.id); nav('/messages/' + c); }catch(e){ toast(e.message); }
+  };
   const toggle = async () => {
     if(!me) return toast('Đăng nhập để theo dõi');
     try{ following ? await api.unfollow(me, p.id) : await api.follow(me, p.id); setFollowing(!following); setCounts(c => c && { ...c, followers:c.followers + (following ? -1 : 1) }); }catch(e){ toast(e.message); }
@@ -41,7 +45,7 @@ export default function Profile({ lessons }){
       </div>
       <div className="ph-actions">
         {me === p.id ? <Link className="btn ghost" to="/settings">Sửa hồ sơ</Link> : <button className={'btn ' + (following ? 'ghost' : 'primary')} onClick={toggle}>{following ? 'Đang theo dõi' : 'Theo dõi'}</button>}
-        {p.master_verified && me !== p.id && <button className="btn ghost" onClick={() => toast('Chat và gọi video với võ sư sẽ có ở giai đoạn 2')}>Liên hệ võ sư</button>}
+        {me !== p.id && <button className="btn ghost" onClick={contact}>{p.master_verified ? 'Liên hệ võ sư' : 'Nhắn tin'}</button>}
       </div>
     </div>
     <div className="tabs"><button className={tab === 'posts' ? 'on' : ''} onClick={() => setTab('posts')}>Bài viết</button><button className={tab === 'prog' ? 'on' : ''} onClick={() => setTab('prog')}>Độ thuần thục</button></div>

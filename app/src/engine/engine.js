@@ -363,7 +363,7 @@ function detectPose(video){
   });
 }
 
-let stream = null;
+let stream = null, externalStream = false;
 async function startCamera(video){
   if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) throw Object.assign(new Error('no-media'), { name:'NoMedia' });
   if(!stream) stream = await navigator.mediaDevices.getUserMedia({ video:{ facingMode:'user', width:{ ideal:1280 }, height:{ ideal:720 } }, audio:false });
@@ -372,7 +372,7 @@ async function startCamera(video){
 }
 function stopCamera(){
   if(typeof stopClip === 'function') stopClip();
-  if(stream){ stream.getTracks().forEach(t => t.stop()); stream = null; }
+  if(stream){ if(!externalStream) stream.getTracks().forEach(t => t.stop()); stream = null; externalStream = false; }
   for(const v of [$('#pvideo'), $('#svideo')]) if(v.srcObject){ v.pause(); v.srcObject = null; }
   P.camOn = false; $('#pEmpty').hidden = false;
   ST.camOn = false; $('#sRec').disabled = true;
@@ -803,7 +803,7 @@ function fillLessonSelects(){
 }
 document.querySelectorAll('.lesson-select').forEach(sel => sel.addEventListener('change', () => {
   S.lessonId = sel.value; S.step = 0; LA.t = 0; LA.all = false;
-  if(S.view==='learn') renderLearn(); else { if(P.state!=='idle') abortFull(); renderPractice(); }
+  if(S.view==='learn') renderLearn(); else { if(P.state!=='idle') abortFull(); setStep(0); }
 }));
 
 /* ================= HOME ================= */
@@ -893,6 +893,9 @@ function renderPractice(){
   const L = lessonById(S.lessonId); fillLessonSelects();
   S.step = clamp(S.step, 0, L.steps.length-1);
   $('#pracTitle').textContent = L.name;
+  const au = $('#pracAuthor');
+  if(L.author && L.author.username){ au.hidden = false; au.innerHTML = `Bài của <b>${esc(L.author.name || L.author.username)}</b> · Hỏi võ sư ›`; au.onclick = () => HOOKS.contact && HOOKS.contact(L.author.username); }
+  else au.hidden = true;
   document.querySelectorAll('#modeSeg button').forEach(b => b.classList.toggle('on', b.dataset.mode===S.mode));
   const pr = progress[L.id];
   $('#stepChips').innerHTML = L.steps.map((s,i) => `<button data-i="${i}" class="${i===S.step && S.mode==='single'?'on':''}">
@@ -919,6 +922,7 @@ function setStep(i){
   Object.assign(P, { hold:0, passed:false, score:0, saidHold:false, lastMsg:'', refT:0, reps:0, repArmed:false, inRep:0, bestHold:0 });
   clearTimeout(P.nextT); $('#pSuccess').hidden = true; P.wrongFor = 0;
   renderPractice();
+  try{ HOOKS.onStep && HOOKS.onStep({ lessonId:L.id, step:S.step, mode:S.mode }); }catch(e){}
   if(P.camOn) say(`Bước ${S.step+1}. ${L.steps[S.step].name}`);
 }
 $('#stepChips').addEventListener('click', e => { const b = e.target.closest('button[data-i]'); if(b) setStep(+b.dataset.i); });
@@ -1233,7 +1237,7 @@ function singleUpdate(L, pose, ctx, H, now, dt){
       if(P.reps < REPS_NEED){ say(`Đúng lần ${P.reps}. Làm lại`); gong(); }
     } else if(!passing) P.inRep = 0;
     if(P.hold >= HOLD_SEC || (P.reps || 0) >= REPS_NEED){
-      P.passed = true; saveProgress(L.id, { step:S.step, score:P.score, hold:P.bestHold, reps:P.reps||0, mastered:true });
+      P.passed = true; SESSION_DONE.add(L.id + ':' + S.step); saveProgress(L.id, { step:S.step, score:P.score, hold:P.bestHold, reps:P.reps||0, mastered:true });
       $('#pSuccess').hidden = false; gong(); say('Thuần thục. Rất tốt.');
       P.nextT = setTimeout(() => {
         $('#pSuccess').hidden = true;
@@ -1317,15 +1321,16 @@ function fullUpdate(L, pose, ctx, H, now){
   if(P.state==='running'){
     const t = (now - P.runStart)/1000 * tempo();
     const f = L.seqStart + t*FPS;
-    const guide = poseAt(L, Math.min(f, L.seqEnd));
-    if(!render3D($('#refStage'), pose3DAt(L, Math.min(f, L.seqEnd)))) drawScene($('#refCanvas'), guide);
+    const gpose = poseAt(L, Math.min(f, L.seqEnd));
+    if(!render3D($('#refStage'), pose3DAt(L, Math.min(f, L.seqEnd)))) drawScene($('#refCanvas'), gpose);
     const si = stepAtFrame(L, Math.min(f, L.seqEnd));
     if(si !== P.guideStep){ P.guideStep = si; updateRefInfo(si); say(L.steps[si].name); }
     $('#guideTag').hidden = false; $('#guideTag').textContent = `Thức ${si+1}/${L.steps.length} · ${L.steps[si].name}`;
     if(now - P.lastRec >= 100){ P.rec.push(pose ? pose.map(q => q.slice()) : null); P.lastRec = now; }
     const dtF = P.lastFull ? Math.min(.2, (now - P.lastFull)/1000) : 0; P.lastFull = now;
     if(pose){
-      const r = compareFeats(features(pose), features(guide), L.steps[si].w), errs = errorsOf(r.items);
+      const r = compareFeats(features(pose), features(gpose), L.steps[si].w), errs = errorsOf(r.items);
+      P.score = P.score*0.7 + r.score*0.3;
       drawUserOverlay(ctx, H, pose, r.score >= PASS ? 'good' : r.score >= 60 ? 'warn' : 'bad', r.items);
       P.wrongFull = r.score < 72 ? (P.wrongFull || 0) + dtF : 0;
       guide(ctx, $('#pvideo'), pose, errs, pose3DAt(L, Math.min(f, L.seqEnd)), S.ghost && P.wrongFull > 1.2, dtF);
@@ -1336,7 +1341,7 @@ function fullUpdate(L, pose, ctx, H, now){
   } else {
     renderHand($('#pvideo'), null, false, null, .05); $('#coachTag').hidden = true;
     if(pose) drawUserOverlay(ctx, H, pose, 'idle', []);
-    setBanner('#pBanner', issue || (P.state==='idle' ? 'Vào vị trí rồi bấm “Bắt đầu cả bài”.' : null));
+    setBanner('#pBanner', issue || (P.state==='idle' ? (root.classList.contains('in-room') ? 'Vào vị trí và chờ bắt đầu trận.' : 'Vào vị trí rồi bấm “Bắt đầu cả bài”.') : null));
     if(P.state==='idle' && now - P.lastUI > 300){ P.lastUI = now; setScoreUI(0, 'Chờ bắt đầu', ''); setFixes([], 'Chế độ cả bài: tập liền mạch theo hình mẫu bên trái. Ứng dụng tự căn nhịp (DTW) nên tập chậm hơn mẫu vẫn được chấm đúng.'); }
   }
 }
@@ -1347,10 +1352,11 @@ function finishFull(){
   const L = lessonById(S.lessonId);
   const res = analyzeRun(L, P.rec);
   P.state = 'idle'; renderPractice(); updateRefInfo(0);
-  if(res.error){ toast(res.error); say(res.error); return; }
+  if(res.error){ toast(res.error); say(res.error); try{ HOOKS.onFullResult && HOOKS.onFullResult({ lessonId:L.id, overall:0, error:res.error }); }catch(e){} return; }
   saveProgress(L.id, { full:res.overall });
   res.steps.forEach(s => { if(s.score >= PASS) saveProgress(L.id, { step:s.idx, score:s.score }); });
   renderResults(L, res); gong();
+  try{ HOOKS.onFullResult && HOOKS.onFullResult({ lessonId:L.id, overall:Math.round(res.overall) }); }catch(e){ console.warn(e); }
   say(`Hoàn thành. Bạn đạt ${Math.round(res.overall)} điểm.`);
 }
 
@@ -1651,6 +1657,14 @@ function studioTick(now, dt){
 
 /* ================= Main loop ================= */
 let lastNow = performance.now();
+let liveAt = 0; const SESSION_DONE = new Set();
+function emitLive(now){
+  if(!HOOKS.onLive || now - liveAt < 250) return; liveAt = now;
+  const L = lessonById(S.lessonId);
+  HOOKS.onLive({ lessonId:L.id, mode:S.mode, step:S.step, steps:L.steps.length, stepName:L.steps[S.step]?.name,
+    score:Math.round(P.camOn ? P.score : 0), passed:!!P.passed, state:P.state, camOn:P.camOn,
+    hold:Math.round((P.hold||0)*10)/10, reps:P.reps||0, done:[...SESSION_DONE].filter(k => k.startsWith(L.id + ':')).length });
+}
 function loop(now){
   requestAnimationFrame(loop);
   const dt = Math.min(0.1, (now - lastNow)/1000); lastNow = now;
@@ -1662,7 +1676,7 @@ function loop(now){
       if(!render3D($('#heroStage'), pose3DAt(L, hf), { autoRotate:true })) drawScene($('#heroCanvas'), poseAt(L, hf));
     }
     if(S.view==='learn') learnTick(dt);
-    if(S.view==='practice') practiceTick(now, dt);
+    if(S.view==='practice'){ practiceTick(now, dt); emitLive(now); }
     if(S.view==='studio') studioTick(now, dt);
   }catch(e){ console.error(e); }
 }
@@ -1677,6 +1691,7 @@ window.KJ = { GH, get lastWorld(){ return lastWorld; }, V3, applyPose3D: p => ap
     show(view, opt = {}){
       if(opt.lessonId && lessons.some(l => l.id === opt.lessonId)){ S.lessonId = opt.lessonId; S.step = 0; }
       if(opt.mode) S.mode = opt.mode;
+      if(opt.step != null) S.step = opt.step;
       if(view === 'none'){
         if(S.view === 'practice' || S.view === 'studio'){ stopCamera(); if(P.state !== 'idle') abortFull(); }
         S.view = 'none';
@@ -1689,6 +1704,17 @@ window.KJ = { GH, get lastWorld(){ return lastWorld; }, V3, applyPose3D: p => ap
       if(S.view === 'home') renderHome(); if(S.view === 'learn') renderLearn(); if(S.view === 'practice') renderPractice(); },
     refresh(){ if(S.view === 'studio') renderStudio(); if(S.view === 'home') renderHome(); },
     setProgress(p){ progress = p || {}; store.set('kj_progress', progress); if(S.view === 'home') renderHome(); },
+    attachStream(s){ stream = s; externalStream = true; if(S.view === 'practice' && !P.camOn) $('#camBtn').click(); },
+    follow(o = {}){
+      let ch = false;
+      if(o.lessonId && o.lessonId !== S.lessonId && lessons.some(l => l.id === o.lessonId)){ S.lessonId = o.lessonId; ch = true; }
+      if(o.mode && o.mode !== S.mode){ if(P.state !== 'idle') abortFull(); S.mode = o.mode; ch = true; }
+      if(o.step != null && (o.step !== S.step || ch)) setStep(o.step); else if(ch) setStep(S.step);
+    },
+    startFull(){ if(S.mode !== 'full'){ S.mode = 'full'; setStep(0); } if(P.state !== 'idle') abortFull(); $('#fullStart').click(); },
+    stopFull(){ if(P.state === 'running') finishFull(); else if(P.state !== 'idle') abortFull(); },
+    setRoom(r){ root.classList.toggle('in-room', !!r); root.classList.toggle('room-guest', !!(r && r.guest)); if(!r) SESSION_DONE.clear(); },
+    state(){ return { lessonId:S.lessonId, step:S.step, mode:S.mode, camOn:P.camOn, running:P.state }; },
     getLessons(){ return lessons.map(l => ({ id:l.id, name:l.name, level:l.level, steps:l.steps.length, author:l.author || null })); },
   };
 }
