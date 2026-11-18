@@ -1,16 +1,28 @@
 # Kungfu Journey 功夫
 
-App luyện võ trên trình duyệt. Học viên xem võ sư làm mẫu bằng nhân vật 3D xoay 360°, rồi bật camera. App theo dõi khung xương bằng MediaPipe, so với động tác chuẩn và chỉ ra lỗi tư thế.
+Nền tảng học võ trên web: học với võ sư 3D, luyện tập có camera AI chấm tư thế, và một mạng xã hội riêng cho người tập võ.
 
-**Demo:** https://hoangvinh1601.github.io/kungfu-journey/ (mở bằng Chrome hoặc Edge, cho phép camera)
+**Demo:** https://hoangvinh1601.github.io/kungfu-journey/
 
-## Tính năng
+## Giai đoạn 1 (đang chạy)
 
-- **Học động tác:** nhân vật 3D có khung xương, xoay 360°, có các góc nhìn sẵn (chính diện, chéo, ngang, sau lưng, từ trên), chế độ "Tập sau lưng thầy", đánh dấu khớp trọng tâm và hiện khung xương.
-- **Luyện từng động tác:** camera chấm điểm tư thế theo thời gian thực. Không vẽ khung xương lên người: thay vào đó là **viền phát sáng quanh cơ thể** (đỏ, vàng, xanh theo độ đúng) và vòng nhấp nháy ở khớp sai. Khi sai quá 1,5 giây, một **bàn tay 3D nhỏ** xuất hiện ngay tại tay/chân đang sai, nắm lấy rồi nâng, hạ, kéo nó tới **điểm xanh** (chỗ bạn cần đưa tay chân tới), sau đó buông ra và lặp lại. Giữ đúng 1,5 giây để qua bước.
-- **Tự hiểu lật gương:** camera và võ sư 3D đều hiển thị như soi gương, nên bạn chỉ cần làm theo hình trên màn hình. App luôn chấm theo bên tay chân thật (tay phải của bạn = tay phải của thầy) và báo **"Ngược bên"** khi bạn dùng nhầm tay/chân. Khi xoay sang góc "Tập sau lưng thầy", hình tự bỏ soi gương.
-- **Luyện cả bài:** tập liên tục theo nhịp mẫu. App căn nhịp bằng DTW, chấm từng thức và chỉ ra thức yếu nhất.
-- **Võ sư:** quay trực tiếp hoặc tải video lên. App tách khung xương 2D và 3D, gợi ý các bước tự động, lưu bài và xuất/nhập file JSON.
+- **Tài khoản:** đăng ký / đăng nhập / đăng xuất bằng email, quên mật khẩu, hồ sơ cá nhân (ảnh, tên, giới thiệu).
+- **Cộng đồng:** bảng tin kiểu mạng xã hội, đăng bài theo chủ đề võ thuật (kỹ thuật, buổi tập, hỏi đáp, bài giảng, thi đấu, sự kiện), ảnh/video, thích, bình luận, chia sẻ, theo dõi, báo cáo. Bài bị 3 người báo cáo tự ẩn chờ duyệt.
+- **Võ sư:** nộp ảnh bằng cấp, ban quản trị duyệt → huy hiệu "Võ sư", được đăng bài giảng và bài tập (Studio). Học viên không đăng được bài giảng (chặn ở cả giao diện lẫn máy chủ).
+- **Độ thuần thục:** mỗi thức giữ đúng 5 giây hoặc làm đúng 3 lần là thuần thục; lưu theo tài khoản, hiện trên trang cá nhân.
+- **Quay video buổi tập:** quay camera kèm viền, bàn tay hướng dẫn và điểm xanh (tối đa 30 giây), đăng thẳng lên cộng đồng.
+- **Quản trị:** duyệt hồ sơ võ sư, xử lý bài bị báo cáo.
+
+## Giai đoạn 2 (kế tiếp)
+
+Chat và gọi video với võ sư của bài, phòng tập chung, thi đấu với màn hình chia đôi.
+
+## Cấu trúc
+
+- `app/`: mã nguồn (Vite + React). `app/src/engine/` là engine luyện tập (MediaPipe, three.js, chấm điểm, studio).
+- `supabase/schema.sql`: cơ sở dữ liệu, phân quyền (RLS), kho lưu trữ. Chạy trong Supabase → SQL Editor.
+- `index.html`, `assets/`: bản build cho GitHub Pages (`cd app && npm install && npm run build`).
+- `models/`, `blender/`: nhân vật 3D và script dựng nhân vật.
 
 ## Nhân vật 3D
 

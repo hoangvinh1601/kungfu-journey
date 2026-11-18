@@ -1,0 +1,176 @@
+
+<!-- HOME -->
+<section class="view" id="view-home">
+  <div class="hero">
+    <div class="hero-text">
+      <p class="eyebrow">Hành trình võ học</p>
+      <h1>Học quyền từng thức, camera sửa tư thế cho bạn.</h1>
+      <p class="lede">Xem võ sư làm mẫu theo từng bước rồi bật camera. Ứng dụng theo dõi khung xương cơ thể bằng MediaPipe, so với động tác chuẩn và chỉ ra chỗ cần sửa: gối, hông, tay, độ rộng tấn.</p>
+      <div class="hero-actions">
+        <button class="btn primary" data-go="learn">Bắt đầu học</button>
+        <button class="btn ghost" data-go="studio">Võ sư thêm bài mới</button>
+      </div>
+    </div>
+    <div class="hero-art v3d" id="heroStage"><span class="hero-han">武</span><canvas id="heroCanvas" class="fallback2d"></canvas></div>
+  </div>
+  <div class="howto">
+    <div><span class="num">一</span><p><b>Xem mẫu</b><span class="muted">Từng thức được tách thành bước, kèm lời dặn và góc khớp chuẩn.</span></p></div>
+    <div><span class="num">二</span><p><b>Luyện tập</b><span class="muted">Mỗi thức: giữ đúng 5 giây hoặc làm đúng 3 lần là thuần thục. Cả bài: tập theo nhịp mẫu.</span></p></div>
+    <div><span class="num">三</span><p><b>Sửa lỗi</b><span class="muted">Khớp sai chuyển đỏ, giọng nói nhắc sửa, bảng điểm chỉ ra thức nào yếu.</span></p></div>
+  </div>
+  <h2 class="section-title">Các chặng đường</h2>
+  <div class="journey" id="journey"></div>
+  <p class="privacy">Hình ảnh camera được xử lý ngay trên máy của bạn và không gửi đi đâu. Tiến độ và bài của võ sư được lưu trong trình duyệt này.</p>
+</section>
+
+<!-- LEARN -->
+<section class="view" id="view-learn">
+  <div class="view-head">
+    <div><p class="eyebrow" id="learnLevel"></p><h2 id="learnTitle"></h2><p class="muted" id="learnDesc"></p></div>
+    <div class="head-actions">
+      <select class="lesson-select" id="learnLesson" aria-label="Chọn bài"></select>
+      <button class="btn primary" id="learnPractice">Luyện động tác này</button>
+      <button class="btn ghost" id="learnPracticeFull">Luyện cả bài</button>
+    </div>
+  </div>
+  <div class="learn-grid">
+    <div class="figure-card">
+      <div class="v3d learn-stage" id="learnStage" data-bar="full"><canvas id="learnCanvas" class="fallback2d"></canvas></div>
+      <div class="fig-controls">
+        <button class="btn small ghost" id="learnPrev">‹ Bước trước</button>
+        <button class="btn small" id="learnToggle">Tạm dừng</button>
+        <button class="btn small ghost" id="learnNext">Bước sau ›</button>
+        <button class="btn small ghost" id="learnAll">Xem cả bài</button>
+        <label class="muted small" for="learnSpeed">Tốc độ</label>
+        <select id="learnSpeed"><option value="0.5">0.5×</option><option value="1" selected>1×</option><option value="1.5">1.5×</option></select>
+      </div>
+    </div>
+    <div class="step-detail card" id="stepDetail"></div>
+    <ol class="step-list" id="learnSteps"></ol>
+  </div>
+</section>
+
+<!-- PRACTICE -->
+<section class="view" id="view-practice">
+  <div class="view-head">
+    <div><p class="eyebrow">Luyện tập</p><h2 id="pracTitle"></h2></div>
+    <div class="head-actions">
+      <select class="lesson-select" id="pracLesson" aria-label="Chọn bài"></select>
+      <div class="seg" id="modeSeg"><button data-mode="single" class="on">Từng động tác</button><button data-mode="full">Cả bài</button></div>
+    </div>
+  </div>
+  <div class="step-chips" id="stepChips"></div>
+  <div class="prac-grid">
+    <aside class="ref-panel card">
+      <div class="ref-label"><span class="han" id="refHan"></span><div><b id="refName"></b><small id="refIdx"></small></div></div>
+      <div class="v3d ref-stage" id="refStage" data-bar="compact"><canvas id="refCanvas" class="fallback2d"></canvas></div>
+      <div>
+        <ul class="cues" id="refCues"></ul>
+        <div class="row" style="margin-top:10px"><button class="btn small ghost" id="stepPrev">‹ Bước trước</button><button class="btn small ghost" id="stepNext">Bước sau ›</button></div>
+      </div>
+    </aside>
+    <div class="stage-col">
+      <div class="stage" id="pStage">
+        <div class="mirror-box mirror"><video id="pvideo" playsinline muted></video><canvas id="pcanvas"></canvas></div>
+        <div class="stage-empty" id="pEmpty">
+          <span class="han-big">練</span>
+          <p>Đặt máy cách 2 đến 3 mét, quay chính diện, sao cho camera thấy cả người từ đầu đến bàn chân.</p>
+          <button class="btn primary" id="camBtn">Bật camera</button>
+          <small id="camErr"></small>
+        </div>
+        <div class="banner" id="pBanner" hidden></div>
+        <div class="guide-tag" id="guideTag" hidden></div>
+        <div class="coach-tag" id="coachTag" hidden></div>
+        <button class="rec-btn" id="recBtn" type="button" hidden>● Quay video</button>
+        <div class="holdbar" id="holdBar" hidden><i></i><span>Giữ tư thế</span></div>
+        <div class="success" id="pSuccess" hidden><span class="han">好</span><b>Đạt!</b></div>
+        <div class="countdown" id="pCount" hidden></div>
+      </div>
+      <div class="stage-actions" id="fullActions" hidden>
+        <label for="tempo">Nhịp mẫu</label>
+        <select id="tempo"><option value="0.5">Chậm (0.5×)</option><option value="0.75" selected>Vừa (0.75×)</option><option value="1">Chuẩn (1×)</option></select>
+        <button class="btn primary" id="fullStart">Bắt đầu cả bài</button>
+        <button class="btn ghost" id="fullStop" disabled>Kết thúc và chấm điểm</button>
+      </div>
+    </div>
+    <aside class="coach card">
+      <div class="score-wrap">
+        <div class="ring">
+          <svg width="104" height="104" viewBox="0 0 104 104"><circle cx="52" cy="52" r="44" fill="none" stroke="#2a221c" stroke-width="9"/><circle id="ringArc" cx="52" cy="52" r="44" fill="none" stroke="#d9a54a" stroke-width="9" stroke-linecap="round" stroke-dasharray="276.5" stroke-dashoffset="276.5"/></svg>
+          <div class="v"><span id="scoreNum">–</span></div>
+        </div>
+        <div><p class="small muted">Độ khớp tư thế</p><span class="pill" id="verdict">Chưa bắt đầu</span></div>
+      </div>
+      <div>
+        <h3 style="margin-bottom:10px">Cần sửa</h3>
+        <ol class="fixes" id="fixes"><li>Bật camera để bắt đầu. Ứng dụng sẽ liệt kê lỗi tư thế ở đây.</li></ol>
+      </div>
+      <details class="settings" open>
+        <summary>Tuỳ chọn</summary>
+        <div class="opts">
+          <label><input type="checkbox" id="optVoice" checked> Nhắc lỗi bằng giọng nói</label>
+          <label><input type="checkbox" id="optGhost" checked> Bàn tay 3D hướng dẫn khi sai</label>
+          <label><input type="checkbox" id="optSkel"> Hiện khung xương (kỹ thuật)</label>
+          <label><input type="checkbox" id="optAuto" checked> Đạt thì tự chuyển bước</label>
+          <label>Mô hình AI <select id="optModel"><option value="lite">Nhẹ (điện thoại)</option><option value="full" selected>Đầy đủ (laptop)</option></select></label>
+        </div>
+      </details>
+    </aside>
+  </div>
+  <section class="results" id="results" hidden></section>
+</section>
+
+<!-- STUDIO -->
+<section class="view" id="view-studio">
+  <div class="view-head">
+    <div><p class="eyebrow">Dành cho võ sư</p><h2>Ghi lại bài quyền mẫu</h2>
+      <p class="muted">Quay trực tiếp hoặc tải video có sẵn. Ứng dụng tách khung xương từng khung hình (10 khung/giây), sau đó bạn đánh dấu các bước để học viên luyện theo. Quay chính diện, thấy cả người.</p></div>
+  </div>
+  <p class="studio-note" id="studioNote"></p>
+  <div class="studio-grid">
+    <div class="card">
+      <div class="form-grid">
+        <label>Tên bài<input type="text" id="sName" placeholder="Ví dụ: Thập tự quyền đoạn 1"></label>
+        <label>Cấp độ<select id="sLevel"><option>Nhập môn</option><option>Sơ cấp</option><option>Trung cấp</option><option>Cao cấp</option></select></label>
+        <label class="full">Mô tả<textarea id="sDesc" placeholder="Bài gồm mấy thức, luyện để làm gì"></textarea></label>
+      </div>
+      <div class="row">
+        <button class="btn" id="sCam">Bật camera</button>
+        <button class="btn primary" id="sRec" disabled>Ghi hình (đếm 3 giây)</button>
+        <label class="btn ghost file">Tải video lên<input type="file" accept="video/*" id="sFile"></label>
+      </div>
+      <div class="stage studio-stage">
+        <div class="mirror-box" id="sBox"><video id="svideo" playsinline muted></video><canvas id="scanvas"></canvas></div>
+        <div class="banner" id="sBanner" hidden></div>
+        <div class="countdown" id="sCount" hidden></div>
+      </div>
+      <p class="muted small" id="sInfo">Chưa có dữ liệu. Bật camera rồi bấm Ghi hình, hoặc tải một video lên.</p>
+    </div>
+    <div class="card">
+      <h3>Đánh dấu các bước</h3>
+      <div class="v3d ed-stage" id="edStage" data-bar="compact"><canvas id="edCanvas" class="fallback2d"></canvas></div>
+      <input type="range" id="edScrub" min="0" max="0" value="0" aria-label="Chọn khung hình">
+      <canvas id="edTimeline"></canvas>
+      <div class="row">
+        <button class="btn small ghost" id="edPlay">Phát</button>
+        <span class="small muted" id="edTime" style="font-variant-numeric:tabular-nums">0.0 s</span>
+        <button class="btn small ghost" id="edSuggest" style="margin-left:auto">Gợi ý bước tự động</button>
+      </div>
+      <div class="form-grid">
+        <label>Tên bước<input type="text" id="edStepName" placeholder="Mã bộ xung quyền"></label>
+        <label>Lời dặn (ngăn cách bằng dấu ;)<input type="text" id="edStepCue" placeholder="Hạ thấp hông; Lưng thẳng"></label>
+        <button class="btn full" id="edAdd">Thêm bước tại khung này</button>
+      </div>
+      <ol class="ed-steps" id="edSteps"></ol>
+      <div class="row">
+        <button class="btn primary" id="edSave">Lưu bài</button>
+        <button class="btn ghost" id="edExport">Xuất file JSON</button>
+        <label class="btn ghost file">Nhập file JSON<input type="file" accept=".json,application/json" id="edImport"></label>
+      </div>
+    </div>
+  </div>
+  <h3>Bài võ sư đã tạo</h3>
+  <div class="custom-list" id="customList"></div>
+</section>
+
+<div class="toast" id="toast" role="status"></div>
