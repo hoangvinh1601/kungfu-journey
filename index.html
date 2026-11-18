@@ -1,0 +1,1800 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kungfu Journey</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&family=Cormorant+Garamond:wght@600;700&family=Ma+Shan+Zheng&display=swap" rel="stylesheet">
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}</script>
+<style>
+/* Kungfu Journey: ink-and-cinnabar dojo. Layout: top bar + one view at a time; practice = reference | camera stage | coach. */
+:root{
+  --ink:#15110f; --ink-2:#1e1814; --ink-3:#2a221c; --line:#3b3028;
+  --paper:#f1e6cf; --paper-dim:#b5a688;
+  --cinnabar:#d4432c; --gold:#d9a54a;
+  --good:#5fb985; --warn:#e8a33d; --bad:#ec5b45;
+  --f-display:'Cormorant Garamond','Times New Roman',serif;
+  --f-body:'Be Vietnam Pro',system-ui,-apple-system,'Segoe UI',sans-serif;
+  --f-brush:'Ma Shan Zheng','KaiTi','STKaiti',serif;
+  --r:14px;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+.stage-card .node span,.step-list .n,.ring .v,.res-score,.ed-steps b,.countdown{font-variant-numeric:lining-nums tabular-nums}
+html,body{margin:0;min-height:100%}
+body{
+  background:
+    radial-gradient(1100px 520px at 88% -8%, rgba(212,67,44,.16), transparent 60%),
+    radial-gradient(900px 500px at -12% 108%, rgba(217,165,74,.09), transparent 60%),
+    var(--ink);
+  color:var(--paper);font-family:var(--f-body);font-size:15px;line-height:1.55;
+}
+h1,h2,h3{font-family:var(--f-display);font-weight:700;line-height:1.12;margin:0;text-wrap:balance;letter-spacing:.2px}
+h1{font-size:clamp(34px,5vw,54px)}
+h2{font-size:clamp(26px,3.2vw,34px)}
+h3{font-size:22px}
+p{margin:0}
+.muted{color:var(--paper-dim)}
+.small{font-size:13px}
+.eyebrow{font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--gold);font-weight:600}
+button,select,input,textarea{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
+
+/* top bar */
+.topbar{position:sticky;top:0;z-index:20;display:flex;align-items:center;gap:20px;padding:10px max(16px,3vw);
+  background:rgba(21,17,15,.88);backdrop-filter:blur(8px);border-bottom:1px solid var(--line)}
+.brand{display:flex;align-items:center;gap:10px;text-decoration:none;color:var(--paper)}
+.seal{width:40px;height:40px;border-radius:6px;background:var(--cinnabar);color:var(--paper);font-family:var(--f-brush);
+  display:grid;place-items:center;font-size:17px;line-height:.95;text-align:center;box-shadow:inset 0 0 0 2px rgba(241,230,207,.25)}
+.brand-text b{display:block;font-family:var(--f-display);font-size:22px;line-height:1}
+.brand-text small{color:var(--paper-dim);font-size:12px}
+.nav{display:flex;gap:4px;margin-left:auto;flex-wrap:wrap}
+.nav a{padding:8px 12px;border-radius:999px;color:var(--paper-dim);text-decoration:none;font-weight:500;font-size:14px}
+.nav a:hover{color:var(--paper);background:var(--ink-3)}
+.nav a.on{color:var(--ink);background:var(--gold)}
+.model-status{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--paper-dim);white-space:nowrap}
+.model-status i{width:8px;height:8px;border-radius:50%;background:#6b5f50}
+.model-status[data-s="loading"] i{background:var(--warn);animation:pulse 1s infinite}
+.model-status[data-s="ready"] i{background:var(--good)}
+.model-status[data-s="error"] i{background:var(--bad)}
+@keyframes pulse{50%{opacity:.3}}
+
+main{padding:24px max(16px,3vw) 60px;max-width:1440px;margin:0 auto}
+.view{display:none}
+.view.active{display:block}
+
+/* buttons */
+.btn{border:1px solid var(--line);background:var(--ink-3);padding:10px 16px;border-radius:10px;cursor:pointer;font-weight:600;font-size:14px;
+  display:inline-flex;align-items:center;gap:6px;transition:background .15s,border-color .15s}
+.btn:hover{border-color:var(--paper-dim)}
+.btn.primary{background:var(--cinnabar);border-color:var(--cinnabar);color:#fff8ec}
+.btn.primary:hover{background:#e04f37}
+.btn.ghost{background:transparent}
+.btn.small{padding:7px 12px;font-size:13px}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.btn.file{position:relative;overflow:hidden}
+.btn.file input{position:absolute;inset:0;opacity:0;cursor:pointer}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.card{background:var(--ink-2);border:1px solid var(--line);border-radius:var(--r);padding:18px}
+select,input[type=text],textarea{background:var(--ink);border:1px solid var(--line);border-radius:10px;padding:9px 12px;width:100%}
+textarea{resize:vertical;min-height:64px}
+.pill{display:inline-block;padding:3px 10px;border-radius:999px;font-size:12px;font-weight:600;background:var(--ink-3);color:var(--paper-dim)}
+.pill.good{background:rgba(95,185,133,.16);color:var(--good)}
+.pill.warn{background:rgba(232,163,61,.16);color:var(--warn)}
+.pill.bad{background:rgba(236,91,69,.16);color:var(--bad)}
+
+/* home */
+.hero{display:grid;grid-template-columns:1.2fr .8fr;gap:32px;align-items:center;padding:12px 0 28px}
+.hero-text{display:flex;flex-direction:column;gap:16px}
+.lede{max-width:58ch;color:var(--paper-dim);font-size:16px}
+.hero-actions{display:flex;gap:10px;flex-wrap:wrap}
+.hero-art{position:relative;height:380px}
+.hero-art canvas{position:relative;z-index:1;width:100%;height:100%}
+.hero-han{position:absolute;inset:0;display:grid;place-items:center;font-family:var(--f-brush);font-size:300px;color:rgba(212,67,44,.10);line-height:1;pointer-events:none}
+.howto{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:36px}
+.howto div{display:flex;gap:12px;align-items:flex-start;padding:14px 16px;border-top:2px solid var(--line)}
+.howto .num{font-family:var(--f-brush);font-size:30px;color:var(--cinnabar);line-height:1}
+.howto b{display:block;margin-bottom:2px}
+.section-title{margin-bottom:16px}
+.journey{display:flex;flex-direction:column;gap:0;position:relative}
+.stage-card{display:grid;grid-template-columns:56px 1fr;gap:16px}
+.stage-card .node{position:relative;display:flex;justify-content:center}
+.stage-card .node::before{content:"";position:absolute;top:0;bottom:0;width:2px;background:repeating-linear-gradient(var(--line) 0 6px,transparent 6px 12px)}
+.stage-card:first-child .node::before{top:22px}
+.stage-card:last-child .node::before{bottom:calc(100% - 22px)}
+.stage-card .node span{position:relative;margin-top:4px;width:40px;height:40px;border-radius:50%;background:var(--ink);border:2px solid var(--gold);
+  display:grid;place-items:center;font-family:var(--f-display);font-weight:700;font-size:20px;color:var(--gold)}
+.stage-card .node span.done{background:var(--gold);color:var(--ink)}
+.sc-body{background:var(--ink-2);border:1px solid var(--line);border-radius:var(--r);padding:18px;margin-bottom:16px;display:flex;flex-direction:column;gap:10px}
+.sc-top{display:flex;gap:14px;align-items:center}
+.han-big{font-family:var(--f-brush);font-size:38px;color:var(--cinnabar);line-height:1;min-width:48px}
+.meta{display:flex;gap:16px;flex-wrap:wrap;font-size:13px;color:var(--paper-dim);font-variant-numeric:tabular-nums}
+.bar{height:6px;border-radius:6px;background:var(--ink-3);overflow:hidden}
+.bar i{display:block;height:100%;background:linear-gradient(90deg,var(--cinnabar),var(--gold))}
+.privacy{margin-top:20px;font-size:13px;color:var(--paper-dim);max-width:75ch}
+
+/* shared view head */
+.view-head{display:flex;justify-content:space-between;gap:20px;align-items:flex-end;flex-wrap:wrap;margin-bottom:18px}
+.view-head > div:first-child{display:flex;flex-direction:column;gap:6px;max-width:70ch}
+.head-actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.head-actions select{width:auto;min-width:200px}
+
+/* learn */
+.learn-grid{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(0,1fr);gap:18px}
+.figure-card{grid-row:span 2;display:flex;flex-direction:column;gap:10px}
+.fig-controls{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.fig-controls select{width:auto}
+.step-detail{display:flex;flex-direction:column;gap:12px}
+.step-detail .sd-head{display:flex;gap:14px;align-items:center}
+.cues{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:4px}
+.targets{display:grid;grid-template-columns:1fr auto;gap:4px 16px;font-size:14px;font-variant-numeric:tabular-nums}
+.targets span:nth-child(even){color:var(--gold);text-align:right;font-weight:600}
+.step-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
+.step-list li button{width:100%;display:flex;gap:12px;align-items:center;text-align:left;background:var(--ink-2);border:1px solid var(--line);border-radius:10px;padding:10px 12px;cursor:pointer}
+.step-list li button.on{border-color:var(--gold);background:var(--ink-3)}
+.step-list .n{font-family:var(--f-display);font-weight:700;font-size:20px;color:var(--gold);width:22px}
+.step-list .h{font-family:var(--f-brush);color:var(--cinnabar);font-size:20px;margin-left:auto}
+.step-list .ok{color:var(--good);font-size:12px;font-weight:600}
+
+/* practice */
+.seg{display:inline-flex;background:var(--ink-2);border:1px solid var(--line);border-radius:10px;padding:3px}
+.seg button{border:0;background:transparent;padding:7px 14px;border-radius:8px;cursor:pointer;font-weight:600;font-size:14px;color:var(--paper-dim)}
+.seg button.on{background:var(--gold);color:var(--ink)}
+.step-chips{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px}
+.step-chips button{border:1px solid var(--line);background:var(--ink-2);border-radius:999px;padding:6px 12px;font-size:13px;cursor:pointer;display:flex;gap:6px;align-items:center}
+.step-chips button.on{border-color:var(--gold);color:var(--gold)}
+.step-chips button .dot{width:7px;height:7px;border-radius:50%;background:var(--ink-3)}
+.step-chips button .dot.good{background:var(--good)}
+.prac-grid{display:grid;grid-template-columns:260px minmax(0,1fr) 300px;gap:16px;align-items:start}
+.ref-panel{display:flex;flex-direction:column;gap:12px}
+.ref-label{display:flex;gap:10px;align-items:center}
+.ref-label .han{font-family:var(--f-brush);font-size:30px;color:var(--cinnabar);line-height:1}
+.ref-label b{display:block;font-size:15px}
+.ref-label small{color:var(--paper-dim)}
+.stage-col{display:flex;flex-direction:column;gap:10px;min-width:0}
+.stage{position:relative;height:min(72vh,640px);border-radius:var(--r);overflow:hidden;background:#0d0a09;border:1px solid var(--line)}
+.mirror-box{position:absolute;inset:0}
+.mirror-box.mirror{transform:scaleX(-1)}
+.mirror-box video,.mirror-box canvas{position:absolute;inset:0;width:100%;height:100%;object-fit:contain}
+.stage-empty{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;text-align:center;padding:24px;
+  background:radial-gradient(circle at 50% 40%, rgba(212,67,44,.12), transparent 60%)}
+.stage-empty p{max-width:42ch;color:var(--paper-dim)}
+.stage-empty small{color:var(--bad);max-width:52ch}
+.banner{position:absolute;left:50%;top:14px;transform:translateX(-50%);background:rgba(21,17,15,.86);border:1px solid var(--line);padding:8px 14px;border-radius:999px;font-size:14px;font-weight:500;max-width:90%;text-align:center}
+.countdown{position:absolute;inset:0;display:grid;place-items:center;font-family:var(--f-display);font-size:160px;font-weight:700;color:var(--gold);background:rgba(13,10,9,.45)}
+.success{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;background:rgba(13,10,9,.35);pointer-events:none}
+.success .han{font-family:var(--f-brush);font-size:150px;color:var(--cinnabar);line-height:1}
+.success b{font-family:var(--f-display);font-size:40px}
+.holdbar{position:absolute;left:16px;right:16px;bottom:14px;height:28px;border-radius:999px;background:rgba(21,17,15,.8);border:1px solid var(--line);overflow:hidden}
+.holdbar i{position:absolute;inset:0;width:0;background:linear-gradient(90deg,rgba(95,185,133,.5),var(--good))}
+.holdbar span{position:relative;display:block;text-align:center;font-size:13px;font-weight:600;line-height:26px}
+.guide-tag{position:absolute;left:14px;bottom:14px;background:rgba(21,17,15,.86);border:1px solid var(--gold);color:var(--gold);padding:6px 12px;border-radius:10px;font-size:14px;font-weight:600}
+.stage-actions{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.stage-actions label{display:flex;gap:8px;align-items:center;font-size:14px;color:var(--paper-dim)}
+.stage-actions select{width:auto}
+.coach{display:flex;flex-direction:column;gap:14px}
+.score-wrap{display:flex;gap:14px;align-items:center}
+.ring{position:relative;width:104px;height:104px;flex:none}
+.ring svg{transform:rotate(-90deg)}
+.ring .v{position:absolute;inset:0;display:grid;place-items:center;font-family:var(--f-display);font-size:38px;font-weight:700;font-variant-numeric:tabular-nums}
+.ring .v small{display:block;font-family:var(--f-body);font-size:11px;color:var(--paper-dim);font-weight:500;margin-top:-30px}
+.fixes{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:8px;min-height:120px}
+.fixes li{display:flex;gap:10px;align-items:flex-start;padding:10px 12px;border-radius:10px;background:var(--ink);border-left:3px solid var(--line);font-size:14px}
+.fixes li.bad{border-left-color:var(--bad)}
+.fixes li.warn{border-left-color:var(--warn)}
+.fixes li.good{border-left-color:var(--good)}
+.fixes li small{display:block;color:var(--paper-dim);font-size:12px}
+.settings{border-top:1px solid var(--line);padding-top:12px}
+.settings summary{cursor:pointer;font-weight:600;font-size:14px}
+.settings .opts{display:flex;flex-direction:column;gap:10px;margin-top:10px;font-size:14px}
+.settings label{display:flex;gap:10px;align-items:center}
+.settings input[type=checkbox]{width:18px;height:18px;accent-color:var(--cinnabar)}
+.settings select{width:auto}
+
+/* results */
+.results{margin-top:24px;display:flex;flex-direction:column;gap:16px}
+.res-head{display:flex;gap:24px;align-items:center;flex-wrap:wrap}
+.res-score{font-family:var(--f-display);font-size:84px;font-weight:700;line-height:.9;color:var(--gold);font-variant-numeric:tabular-nums}
+.res-score small{font-size:24px;color:var(--paper-dim)}
+#timeline{width:100%;height:56px}
+.res-steps{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px}
+.res-step{background:var(--ink-2);border:1px solid var(--line);border-radius:var(--r);padding:12px;display:flex;flex-direction:column;gap:8px}
+.res-step canvas{width:100%;height:170px;background:var(--ink);border-radius:8px}
+.res-step ul{margin:0;padding-left:16px;font-size:13px;color:var(--paper-dim)}
+.res-step .t{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.legend{display:flex;gap:14px;font-size:12px;color:var(--paper-dim);flex-wrap:wrap}
+.legend i{display:inline-block;width:14px;height:3px;border-radius:2px;margin-right:6px;vertical-align:middle}
+
+/* studio */
+.studio-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px;align-items:start;margin-bottom:28px}
+.studio-grid .card{display:flex;flex-direction:column;gap:12px}
+.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.form-grid .full{grid-column:1/-1}
+.form-grid label{display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--paper-dim)}
+.studio-stage{height:340px}
+#edScrub{width:100%;accent-color:var(--gold)}
+#edTimeline{width:100%;height:28px;cursor:pointer}
+.ed-steps{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:6px}
+.ed-steps li{display:flex;gap:10px;align-items:center;background:var(--ink);border:1px solid var(--line);border-radius:10px;padding:8px 10px;font-size:14px}
+.ed-steps li .grow{flex:1;min-width:0}
+.ed-steps li small{display:block;color:var(--paper-dim)}
+.custom-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px;margin-top:12px}
+.custom-list .card{display:flex;flex-direction:column;gap:8px}
+
+/* 3D viewer hosts */
+.v3d{position:relative;overflow:hidden;border-radius:var(--r);border:1px solid var(--line);
+  background:radial-gradient(ellipse at 50% 35%, rgba(212,67,44,.16), transparent 60%),linear-gradient(#211a16,#120e0c)}
+.v3d > canvas.fallback2d{position:absolute;inset:0;width:100%;height:100%;display:block;border:0;background:none}
+.v3d.has3d > canvas.fallback2d{display:none}
+.v3d-canvas{position:absolute;inset:0;width:100%!important;height:100%!important;display:block;touch-action:none;cursor:grab}
+.v3d-canvas:active{cursor:grabbing}
+.v3d-bar{position:absolute;left:10px;right:10px;bottom:10px;display:none;gap:6px;flex-wrap:wrap;align-items:center;z-index:2;pointer-events:none}
+.v3d-bar > *{pointer-events:auto}
+.has3d .v3d-bar{display:flex}
+.v3d-bar button,.v3d-bar select,.v3d-bar label.file{font-size:12px;font-weight:600;padding:6px 10px;border-radius:999px;border:1px solid var(--line);background:rgba(21,17,15,.82);color:var(--paper);cursor:pointer;width:auto;position:relative}
+.v3d-bar button.on{background:var(--gold);color:var(--ink);border-color:var(--gold)}
+.v3d-bar label.file input{position:absolute;inset:0;opacity:0;cursor:pointer}
+.v3d-bar .sep{flex:1}
+.v3d-hint{position:absolute;top:10px;left:12px;font-size:12px;color:var(--paper-dim);display:none;z-index:2;pointer-events:none}
+.has3d .v3d-hint{display:block}
+.v3d-load{position:absolute;top:10px;right:12px;font-size:12px;color:var(--gold);z-index:2}
+.v3d[data-bar="compact"] .v3d-bar{top:8px;bottom:auto;left:8px;right:8px;gap:4px}
+.v3d[data-bar="compact"] .v3d-bar button{padding:4px 8px;font-size:11px}
+.v3d[data-bar="compact"] .v3d-hint{top:auto;bottom:8px}
+.learn-stage{height:min(64vh,600px)}
+.ref-stage{height:340px}
+.ed-stage{height:320px}
+.hero-art.v3d{border:0;background:none}
+.hero-art .hero-han{z-index:0}
+.toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%) translateY(20px);opacity:0;background:var(--paper);color:var(--ink);padding:10px 18px;border-radius:999px;font-weight:600;font-size:14px;transition:.25s;z-index:50;pointer-events:none;max-width:90vw;text-align:center}
+.toast.on{opacity:1;transform:translateX(-50%)}
+
+@media (max-width:1100px){
+  .prac-grid{grid-template-columns:minmax(0,1fr) 280px}
+  .ref-panel{grid-column:1/-1;flex-direction:row;flex-wrap:wrap}
+  .ref-panel > *{flex:1 1 220px}
+  .ref-stage{height:240px}
+}
+@media (max-width:820px){
+  .hero,.learn-grid,.studio-grid,.prac-grid{grid-template-columns:1fr}
+  .hero-art{height:280px}
+  .hero-han{font-size:220px}
+  .howto{grid-template-columns:1fr}
+  .figure-card{grid-row:auto}
+  .stage{height:62vh}
+  .form-grid{grid-template-columns:1fr}
+  .model-status span{display:none}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="#home"><span class="seal">功<br>夫</span><span class="brand-text"><b>Kungfu Journey</b><small>Võ đường số</small></span></a>
+  <nav class="nav">
+    <a href="#home" data-view="home">Hành trình</a>
+    <a href="#learn" data-view="learn">Học động tác</a>
+    <a href="#practice" data-view="practice">Luyện tập</a>
+    <a href="#studio" data-view="studio">Võ sư</a>
+  </nav>
+  <div class="model-status" id="modelStatus" data-s="idle"><i></i><span>AI chưa tải</span></div>
+</header>
+
+<main>
+<!-- HOME -->
+<section class="view" id="view-home">
+  <div class="hero">
+    <div class="hero-text">
+      <p class="eyebrow">Hành trình võ học</p>
+      <h1>Học quyền từng thức, camera sửa tư thế cho bạn.</h1>
+      <p class="lede">Xem võ sư làm mẫu theo từng bước rồi bật camera. Ứng dụng theo dõi khung xương cơ thể bằng MediaPipe, so với động tác chuẩn và chỉ ra chỗ cần sửa: gối, hông, tay, độ rộng tấn.</p>
+      <div class="hero-actions">
+        <button class="btn primary" data-go="learn">Bắt đầu học</button>
+        <button class="btn ghost" data-go="studio">Võ sư thêm bài mới</button>
+      </div>
+    </div>
+    <div class="hero-art v3d" id="heroStage"><span class="hero-han">武</span><canvas id="heroCanvas" class="fallback2d"></canvas></div>
+  </div>
+  <div class="howto">
+    <div><span class="num">一</span><p><b>Xem mẫu</b><span class="muted">Từng thức được tách thành bước, kèm lời dặn và góc khớp chuẩn.</span></p></div>
+    <div><span class="num">二</span><p><b>Luyện tập</b><span class="muted">Từng động tác: giữ đúng 1,5 giây để qua bước. Cả bài: tập theo nhịp mẫu.</span></p></div>
+    <div><span class="num">三</span><p><b>Sửa lỗi</b><span class="muted">Khớp sai chuyển đỏ, giọng nói nhắc sửa, bảng điểm chỉ ra thức nào yếu.</span></p></div>
+  </div>
+  <h2 class="section-title">Các chặng đường</h2>
+  <div class="journey" id="journey"></div>
+  <p class="privacy">Hình ảnh camera được xử lý ngay trên máy của bạn và không gửi đi đâu. Tiến độ và bài của võ sư được lưu trong trình duyệt này.</p>
+</section>
+
+<!-- LEARN -->
+<section class="view" id="view-learn">
+  <div class="view-head">
+    <div><p class="eyebrow" id="learnLevel"></p><h2 id="learnTitle"></h2><p class="muted" id="learnDesc"></p></div>
+    <div class="head-actions">
+      <select class="lesson-select" id="learnLesson" aria-label="Chọn bài"></select>
+      <button class="btn primary" id="learnPractice">Luyện động tác này</button>
+      <button class="btn ghost" id="learnPracticeFull">Luyện cả bài</button>
+    </div>
+  </div>
+  <div class="learn-grid">
+    <div class="figure-card">
+      <div class="v3d learn-stage" id="learnStage" data-bar="full"><canvas id="learnCanvas" class="fallback2d"></canvas></div>
+      <div class="fig-controls">
+        <button class="btn small ghost" id="learnPrev">‹ Bước trước</button>
+        <button class="btn small" id="learnToggle">Tạm dừng</button>
+        <button class="btn small ghost" id="learnNext">Bước sau ›</button>
+        <button class="btn small ghost" id="learnAll">Xem cả bài</button>
+        <label class="muted small" for="learnSpeed">Tốc độ</label>
+        <select id="learnSpeed"><option value="0.5">0.5×</option><option value="1" selected>1×</option><option value="1.5">1.5×</option></select>
+      </div>
+    </div>
+    <div class="step-detail card" id="stepDetail"></div>
+    <ol class="step-list" id="learnSteps"></ol>
+  </div>
+</section>
+
+<!-- PRACTICE -->
+<section class="view" id="view-practice">
+  <div class="view-head">
+    <div><p class="eyebrow">Luyện tập</p><h2 id="pracTitle"></h2></div>
+    <div class="head-actions">
+      <select class="lesson-select" id="pracLesson" aria-label="Chọn bài"></select>
+      <div class="seg" id="modeSeg"><button data-mode="single" class="on">Từng động tác</button><button data-mode="full">Cả bài</button></div>
+    </div>
+  </div>
+  <div class="step-chips" id="stepChips"></div>
+  <div class="prac-grid">
+    <aside class="ref-panel card">
+      <div class="ref-label"><span class="han" id="refHan"></span><div><b id="refName"></b><small id="refIdx"></small></div></div>
+      <div class="v3d ref-stage" id="refStage" data-bar="compact"><canvas id="refCanvas" class="fallback2d"></canvas></div>
+      <div>
+        <ul class="cues" id="refCues"></ul>
+        <div class="row" style="margin-top:10px"><button class="btn small ghost" id="stepPrev">‹ Bước trước</button><button class="btn small ghost" id="stepNext">Bước sau ›</button></div>
+      </div>
+    </aside>
+    <div class="stage-col">
+      <div class="stage" id="pStage">
+        <div class="mirror-box mirror"><video id="pvideo" playsinline muted></video><canvas id="pcanvas"></canvas></div>
+        <div class="stage-empty" id="pEmpty">
+          <span class="han-big">練</span>
+          <p>Đặt máy cách 2 đến 3 mét, quay chính diện, sao cho camera thấy cả người từ đầu đến bàn chân.</p>
+          <button class="btn primary" id="camBtn">Bật camera</button>
+          <small id="camErr"></small>
+        </div>
+        <div class="banner" id="pBanner" hidden></div>
+        <div class="guide-tag" id="guideTag" hidden></div>
+        <div class="holdbar" id="holdBar" hidden><i></i><span>Giữ tư thế</span></div>
+        <div class="success" id="pSuccess" hidden><span class="han">好</span><b>Đạt!</b></div>
+        <div class="countdown" id="pCount" hidden></div>
+      </div>
+      <div class="stage-actions" id="fullActions" hidden>
+        <label for="tempo">Nhịp mẫu</label>
+        <select id="tempo"><option value="0.5">Chậm (0.5×)</option><option value="0.75" selected>Vừa (0.75×)</option><option value="1">Chuẩn (1×)</option></select>
+        <button class="btn primary" id="fullStart">Bắt đầu cả bài</button>
+        <button class="btn ghost" id="fullStop" disabled>Kết thúc và chấm điểm</button>
+      </div>
+    </div>
+    <aside class="coach card">
+      <div class="score-wrap">
+        <div class="ring">
+          <svg width="104" height="104" viewBox="0 0 104 104"><circle cx="52" cy="52" r="44" fill="none" stroke="#2a221c" stroke-width="9"/><circle id="ringArc" cx="52" cy="52" r="44" fill="none" stroke="#d9a54a" stroke-width="9" stroke-linecap="round" stroke-dasharray="276.5" stroke-dashoffset="276.5"/></svg>
+          <div class="v"><span id="scoreNum">–</span></div>
+        </div>
+        <div><p class="small muted">Độ khớp tư thế</p><span class="pill" id="verdict">Chưa bắt đầu</span></div>
+      </div>
+      <div>
+        <h3 style="margin-bottom:10px">Cần sửa</h3>
+        <ol class="fixes" id="fixes"><li>Bật camera để bắt đầu. Ứng dụng sẽ liệt kê lỗi tư thế ở đây.</li></ol>
+      </div>
+      <details class="settings" open>
+        <summary>Tuỳ chọn</summary>
+        <div class="opts">
+          <label><input type="checkbox" id="optVoice" checked> Nhắc lỗi bằng giọng nói</label>
+          <label><input type="checkbox" id="optGhost" checked> Hiện bóng mẫu trên camera</label>
+          <label><input type="checkbox" id="optMirror" checked> Chấp nhận tập đối xứng (đổi tay/chân)</label>
+          <label><input type="checkbox" id="optAuto" checked> Đạt thì tự chuyển bước</label>
+          <label>Mô hình AI <select id="optModel"><option value="lite">Nhẹ (điện thoại)</option><option value="full" selected>Đầy đủ (laptop)</option></select></label>
+        </div>
+      </details>
+    </aside>
+  </div>
+  <section class="results" id="results" hidden></section>
+</section>
+
+<!-- STUDIO -->
+<section class="view" id="view-studio">
+  <div class="view-head">
+    <div><p class="eyebrow">Dành cho võ sư</p><h2>Ghi lại bài quyền mẫu</h2>
+      <p class="muted">Quay trực tiếp hoặc tải video có sẵn. Ứng dụng tách khung xương từng khung hình (10 khung/giây), sau đó bạn đánh dấu các bước để học viên luyện theo. Quay chính diện, thấy cả người.</p></div>
+  </div>
+  <div class="studio-grid">
+    <div class="card">
+      <div class="form-grid">
+        <label>Tên bài<input type="text" id="sName" placeholder="Ví dụ: Thập tự quyền đoạn 1"></label>
+        <label>Cấp độ<select id="sLevel"><option>Nhập môn</option><option>Sơ cấp</option><option>Trung cấp</option><option>Cao cấp</option></select></label>
+        <label class="full">Mô tả<textarea id="sDesc" placeholder="Bài gồm mấy thức, luyện để làm gì"></textarea></label>
+      </div>
+      <div class="row">
+        <button class="btn" id="sCam">Bật camera</button>
+        <button class="btn primary" id="sRec" disabled>Ghi hình (đếm 3 giây)</button>
+        <label class="btn ghost file">Tải video lên<input type="file" accept="video/*" id="sFile"></label>
+      </div>
+      <div class="stage studio-stage">
+        <div class="mirror-box" id="sBox"><video id="svideo" playsinline muted></video><canvas id="scanvas"></canvas></div>
+        <div class="banner" id="sBanner" hidden></div>
+        <div class="countdown" id="sCount" hidden></div>
+      </div>
+      <p class="muted small" id="sInfo">Chưa có dữ liệu. Bật camera rồi bấm Ghi hình, hoặc tải một video lên.</p>
+    </div>
+    <div class="card">
+      <h3>Đánh dấu các bước</h3>
+      <div class="v3d ed-stage" id="edStage" data-bar="compact"><canvas id="edCanvas" class="fallback2d"></canvas></div>
+      <input type="range" id="edScrub" min="0" max="0" value="0" aria-label="Chọn khung hình">
+      <canvas id="edTimeline"></canvas>
+      <div class="row">
+        <button class="btn small ghost" id="edPlay">Phát</button>
+        <span class="small muted" id="edTime" style="font-variant-numeric:tabular-nums">0.0 s</span>
+        <button class="btn small ghost" id="edSuggest" style="margin-left:auto">Gợi ý bước tự động</button>
+      </div>
+      <div class="form-grid">
+        <label>Tên bước<input type="text" id="edStepName" placeholder="Mã bộ xung quyền"></label>
+        <label>Lời dặn (ngăn cách bằng dấu ;)<input type="text" id="edStepCue" placeholder="Hạ thấp hông; Lưng thẳng"></label>
+        <button class="btn full" id="edAdd">Thêm bước tại khung này</button>
+      </div>
+      <ol class="ed-steps" id="edSteps"></ol>
+      <div class="row">
+        <button class="btn primary" id="edSave">Lưu bài</button>
+        <button class="btn ghost" id="edExport">Xuất file JSON</button>
+        <label class="btn ghost file">Nhập file JSON<input type="file" accept=".json,application/json" id="edImport"></label>
+      </div>
+    </div>
+  </div>
+  <h3>Bài võ sư đã tạo</h3>
+  <div class="custom-list" id="customList"></div>
+</section>
+</main>
+<div class="toast" id="toast" role="status"></div>
+
+<script type="module">
+/* ================= Config ================= */
+const MP_VER = '0.10.14';
+const MP_URL = `https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${MP_VER}`;
+const MODEL_URLS = {
+  lite: 'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task',
+  full: 'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_full/float16/1/pose_landmarker_full.task'
+};
+const FPS = 10;            // lesson sequences are sampled at 10 frames per second
+const PASS = 80;           // score needed to pass a step
+const HOLD_SEC = 1.5;      // seconds a correct pose must be held
+const VIS = 0.5;           // landmark visibility threshold
+
+/* ================= Pose model ================= */
+const KEYS = ['nose','ls','rs','le','re','lw','rw','lh','rh','lk','rk','la','ra'];
+const KI = Object.fromEntries(KEYS.map((k,i)=>[k,i]));
+const MP_IDX = [0,11,12,13,14,15,16,23,24,25,26,27,28];
+const SIDE = { l:'trái', r:'phải' };
+
+const g = (p,k) => p[KI[k]];
+const dist = (a,b) => Math.hypot(a[0]-b[0], a[1]-b[1]);
+const mid = (a,b) => [(a[0]+b[0])/2, (a[1]+b[1])/2];
+const vis = (p,k) => { const q = p && p[KI[k]]; return !!q && q[2] >= VIS; };
+const clamp = (x,a,b) => Math.max(a, Math.min(b, x));
+const ease = t => t<.5 ? 2*t*t : 1-Math.pow(-2*t+2,2)/2;
+
+function mk(o){ return KEYS.map(k => [o[k][0], o[k][1], 1, o[k][2] || 0]); }  // [x, y, visibility, z(depth toward camera)]
+function swapKey(k){ return k==='nose' ? k : (k[0]==='l' ? 'r' : 'l') + k.slice(1); }
+function mirrorPose(p){
+  if(!p) return p;
+  const cx = (g(p,'lh')[0] + g(p,'rh')[0]) / 2;
+  return KEYS.map(k => { const q = p[KI[swapKey(k)]]; return [2*cx - q[0], q[1], q[2], q[3] || 0]; });
+}
+function mirrorW(w){ const o = {}; for(const k in w){ o[/^[lr][A-Z]/.test(k) ? (k[0]==='l'?'r':'l') + k.slice(1) : k] = w[k]; } return o; }
+function lerpPose(a,b,t){ return a.map((q,i) => { const r = b[i]; return [q[0]+(r[0]-q[0])*t, q[1]+(r[1]-q[1])*t, Math.min(q[2], r[2]), (q[3]||0)+((r[3]||0)-(q[3]||0))*t]; }); }
+function lerp3(a,b,t){ return a.map((q,i) => [q[0]+(b[i][0]-q[0])*t, q[1]+(b[i][1]-q[1])*t, q[2]+(b[i][2]-q[2])*t]); }
+function mirror3(p){ return KEYS.map(k => { const q = p[KI[swapKey(k)]]; return [-q[0], q[1], q[2]]; }); }
+function torsoLen(p){ return dist(mid(g(p,'ls'),g(p,'rs')), mid(g(p,'lh'),g(p,'rh'))) || 1e-3; }
+
+/* ================= Features (joint angles) ================= */
+const FEATS = [
+  { id:'lElbow',    label:'Khuỷu tay trái',  kind:'elbow',    side:'l', pts:['ls','le','lw'], tol:25 },
+  { id:'rElbow',    label:'Khuỷu tay phải',  kind:'elbow',    side:'r', pts:['rs','re','rw'], tol:25 },
+  { id:'lShoulder', label:'Vai trái (nâng tay)', kind:'shoulder', side:'l', pts:['lh','ls','le'], tol:22 },
+  { id:'rShoulder', label:'Vai phải (nâng tay)', kind:'shoulder', side:'r', pts:['rh','rs','re'], tol:22 },
+  { id:'lHip',      label:'Hông trái',       kind:'hip',      side:'l', pts:['ls','lh','lk'], tol:20 },
+  { id:'rHip',      label:'Hông phải',       kind:'hip',      side:'r', pts:['rs','rh','rk'], tol:20 },
+  { id:'lKnee',     label:'Gối trái',        kind:'knee',     side:'l', pts:['lh','lk','la'], tol:18 },
+  { id:'rKnee',     label:'Gối phải',        kind:'knee',     side:'r', pts:['rh','rk','ra'], tol:18 },
+  { id:'stance',    label:'Độ rộng tấn',     kind:'stance',             pts:['la','ra','ls','rs'], tol:0.45 },
+  { id:'torso',     label:'Độ nghiêng thân', kind:'torso',              pts:['ls','rs','lh','rh'], tol:12 },
+];
+function ang(a,b,c){
+  const x1=a[0]-b[0], y1=a[1]-b[1], x2=c[0]-b[0], y2=c[1]-b[1];
+  const d = Math.hypot(x1,y1)*Math.hypot(x2,y2); if(!d) return null;
+  return Math.acos(clamp((x1*x2+y1*y2)/d, -1, 1)) * 180/Math.PI;
+}
+function featVal(p,f){
+  if(!p || !f.pts.every(k => vis(p,k))) return null;
+  if(f.kind==='stance'){ const sw = dist(g(p,'ls'),g(p,'rs')); return sw>1e-6 ? dist(g(p,'la'),g(p,'ra'))/sw : null; }
+  if(f.kind==='torso'){
+    const s = mid(g(p,'ls'),g(p,'rs')), h = mid(g(p,'lh'),g(p,'rh'));
+    return Math.atan2(Math.abs(s[0]-h[0]), h[1]-s[1]) * 180/Math.PI;
+  }
+  return ang(g(p,f.pts[0]), g(p,f.pts[1]), g(p,f.pts[2]));
+}
+const features = p => FEATS.map(f => featVal(p,f));
+const fmtFeat = (f,v) => v==null ? '–' : f.kind==='stance' ? v.toFixed(1)+'× vai' : Math.round(v)+'°';
+
+function featScore(nd){ return nd<=1 ? 1-0.25*nd : Math.max(0, 0.75-0.375*(nd-1)); }
+function compareFeats(uf, rf, w, withItems=true){
+  let tot=0, sw=0, ss=0; const items = [];
+  for(let i=0;i<FEATS.length;i++){
+    const f = FEATS[i], wt = w && w[f.id]!=null ? w[f.id] : 1;
+    if(wt<=0 || rf[i]==null) continue;
+    tot += wt;
+    if(uf[i]==null) continue;
+    const d = uf[i]-rf[i], nd = Math.abs(d)/f.tol, s = featScore(nd);
+    sw += wt; ss += wt*s;
+    if(withItems) items.push({ f, d, nd, s, wt, u:uf[i], r:rf[i] });
+  }
+  const coverage = tot ? sw/tot : 0;
+  const raw = sw ? 100*ss/sw : 0;
+  return { score: raw*Math.min(1, coverage/0.8), coverage, items };
+}
+function advice(it){
+  const s = SIDE[it.f.side], more = it.d>0;
+  switch(it.f.kind){
+    case 'elbow':    return more ? `Co khuỷu tay ${s} lại` : `Duỗi tay ${s} thẳng hơn`;
+    case 'shoulder': return more ? `Hạ cánh tay ${s} xuống` : `Nâng cánh tay ${s} lên cao hơn`;
+    case 'hip':      return it.r<110 ? (more ? `Nhấc gối ${s} lên cao hơn` : `Hạ chân ${s} xuống một chút`)
+                                     : (more ? `Mở hông, đẩy gối ${s} ra ngoài` : `Thu gối ${s} vào`);
+    case 'knee':     return it.r>160 ? (more ? `Chùng nhẹ gối ${s}` : `Duỗi thẳng chân ${s}`)
+                                     : (more ? `Khuỵu gối ${s} thấp hơn` : `Gối ${s} gập quá sâu, nâng người lên`);
+    case 'stance':   return more ? 'Thu hẹp tấn lại' : 'Mở rộng tấn thêm';
+    case 'torso':    return more ? 'Giữ thân thẳng, đừng nghiêng người' : 'Nghiêng thân theo mẫu';
+  }
+  return '';
+}
+const errorsOf = items => items.filter(it => it.nd>1 && it.wt>=0.5).sort((a,b) => b.nd*b.wt - a.nd*a.wt);
+
+/* ================= Built-in lessons (authored 2D keyframes, camera view) ================= */
+// 2D keyframes as seen by a camera facing the student (x right = student's LEFT, y down), third value = depth toward camera.
+const SALUTE = { nose:[.5,.12,.02], ls:[.58,.25], rs:[.42,.25], le:[.645,.38,.05], re:[.355,.38,.05], lw:[.525,.33,.14], rw:[.475,.33,.14],
+  lh:[.555,.52], rh:[.445,.52], lk:[.535,.72], rk:[.465,.72], la:[.53,.92], ra:[.47,.92] };
+const HORSE = { nose:[.5,.20,.01], ls:[.58,.33], rs:[.42,.33], le:[.685,.44,-.03], re:[.315,.44,-.03], lw:[.635,.55,.05], rw:[.365,.55,.05],
+  lh:[.555,.60,-.02], rh:[.445,.60,-.02], lk:[.69,.76,.04], rk:[.31,.76,.04], la:[.70,.92], ra:[.30,.92] };
+const HORSE_PR = { ...HORSE, re:[.30,.33], rw:[.18,.33] };
+const HORSE_PL = { ...HORSE, le:[.70,.33], lw:[.82,.33] };
+const BOW_L = { nose:[.52,.20,.01], ls:[.60,.33], rs:[.44,.33], le:[.705,.44,-.03], re:[.34,.45,-.03], lw:[.655,.55,.05], rw:[.39,.56,.05],
+  lh:[.575,.60], rh:[.465,.60], lk:[.72,.74,.03], rk:[.3675,.76], la:[.73,.92], ra:[.27,.92] };
+const BOW_L_BLOCK = { ...BOW_L, le:[.70,.21,.06], lw:[.56,.13,.10] };
+const CRANE_L = { nose:[.5,.12,.01], ls:[.58,.25], rs:[.42,.25], le:[.70,.22], re:[.30,.22], lw:[.82,.18], rw:[.18,.18],
+  lh:[.555,.52], rh:[.445,.52], lk:[.64,.46,.15], rk:[.45,.72,.02], la:[.60,.66,.07], ra:[.455,.92] };
+
+const W = {
+  salute:{ lKnee:.5, rKnee:.5, lHip:.5, rHip:.5, stance:1, lElbow:1.2, rElbow:1.2, lShoulder:1, rShoulder:1, torso:1 },
+  horse:{ lKnee:1.5, rKnee:1.5, lHip:1.2, rHip:1.2, stance:1.5, lElbow:.5, rElbow:.5, lShoulder:.6, rShoulder:.6, torso:1 },
+  horsePR:{ lKnee:1.2, rKnee:1.2, lHip:1, rHip:1, stance:1.2, lElbow:.5, rElbow:1.5, lShoulder:.6, rShoulder:1.5, torso:1 },
+  bowL:{ lKnee:1.5, rKnee:1.5, lHip:1, rHip:1, stance:1.2, lElbow:.5, rElbow:.5, lShoulder:.6, rShoulder:.6, torso:1 },
+  craneL:{ lHip:1.5, lKnee:1, rKnee:1.2, rHip:.8, stance:0, lElbow:.8, rElbow:.8, lShoulder:1.2, rShoulder:1.2, torso:1 },
+};
+W.bowLBlock = { ...W.bowL, lElbow:1.2, lShoulder:1.5 };
+
+const BUILTIN = [
+  { id:'tan-phap', han:'步法', name:'Tấn pháp căn bản', level:'Nhập môn',
+    desc:'Sáu thế đứng nền tảng của mọi bài quyền. Luyện cho chân khoẻ, trọng tâm vững trước khi học đòn tay. Đứng chính diện với camera.',
+    steps:[
+      { name:'Bão quyền lễ', han:'抱拳', pose:mk(SALUTE), w:W.salute, desc:'Thế chào mở đầu và kết thúc mỗi buổi tập.',
+        cue:['Hai chân khép, đứng thẳng','Quyền phải áp vào lòng bàn tay trái, trước ngực','Khuỷu tay mở sang hai bên, vai thả lỏng'] },
+      { name:'Mã bộ', han:'馬步', pose:mk(HORSE), w:W.horse, desc:'Tấn ngựa: hạ trọng tâm như đang cưỡi ngựa.',
+        cue:['Hai bàn chân rộng khoảng 2,5 lần vai','Khuỵu gối, gối mở ra ngoài theo hướng mũi chân','Lưng thẳng, hai quyền thủ ngang hông'] },
+      { name:'Cung bộ trái', han:'弓步', pose:mk(BOW_L), w:W.bowL, desc:'Tấn cung: chân trước khuỵu như cánh cung, chân sau duỗi như dây cung.',
+        cue:['Gối trái khuỵu, nằm trên bàn chân trái','Chân phải duỗi thẳng','Thân thẳng, trọng tâm dồn sang chân trái'] },
+      { name:'Cung bộ phải', han:'弓步', pose:mirrorPose(mk(BOW_L)), w:mirrorW(W.bowL), desc:'Đổi bên của cung bộ.',
+        cue:['Gối phải khuỵu, nằm trên bàn chân phải','Chân trái duỗi thẳng','Thân thẳng, trọng tâm dồn sang chân phải'] },
+      { name:'Độc lập bộ trái', han:'獨立', pose:mk(CRANE_L), w:W.craneL, desc:'Đứng một chân, luyện thăng bằng.',
+        cue:['Trụ chân phải, gối trụ hơi chùng','Nhấc gối trái lên cao ngang hông','Hai tay dang ngang giữ thăng bằng'] },
+      { name:'Độc lập bộ phải', han:'獨立', pose:mirrorPose(mk(CRANE_L)), w:mirrorW(W.craneL), desc:'Đổi chân trụ.',
+        cue:['Trụ chân trái, gối trụ hơi chùng','Nhấc gối phải lên cao ngang hông','Hai tay dang ngang giữ thăng bằng'] },
+    ] },
+  { id:'ngu-thuc', han:'五式', name:'Ngũ thức quyền', level:'Sơ cấp',
+    desc:'Bài quyền ngắn 7 thức nối tấn pháp với đòn tay: xung quyền ngang, thượng giá đỡ trên và kim kê độc lập.',
+    steps:[
+      { name:'Khởi thế', han:'起勢', pose:mk(SALUTE), w:W.salute, desc:'Chào và định thần trước khi vào bài.',
+        cue:['Đứng khép chân','Ôm quyền trước ngực','Mắt nhìn thẳng'] },
+      { name:'Mã bộ xung quyền phải', han:'衝拳', pose:mk(HORSE_PR), w:W.horsePR, desc:'Xuống mã bộ, đấm quyền phải sang ngang.',
+        cue:['Giữ mã bộ thấp, gối mở','Tay phải duỗi thẳng ngang vai','Quyền trái thủ ở hông'] },
+      { name:'Mã bộ xung quyền trái', han:'衝拳', pose:mk(HORSE_PL), w:mirrorW(W.horsePR), desc:'Thu quyền phải, đấm quyền trái.',
+        cue:['Tấn không đổi','Tay trái duỗi thẳng ngang vai','Quyền phải rút về hông'] },
+      { name:'Cung bộ thượng giá trái', han:'上架', pose:mk(BOW_L_BLOCK), w:W.bowLBlock, desc:'Chuyển cung bộ trái, tay trái gạt đỡ trên đầu.',
+        cue:['Gối trái khuỵu, chân phải thẳng','Cẳng tay trái nằm ngang trên trán','Quyền phải ở hông'] },
+      { name:'Cung bộ thượng giá phải', han:'上架', pose:mirrorPose(mk(BOW_L_BLOCK)), w:mirrorW(W.bowLBlock), desc:'Đổi bên.',
+        cue:['Gối phải khuỵu, chân trái thẳng','Cẳng tay phải nằm ngang trên trán','Quyền trái ở hông'] },
+      { name:'Kim kê độc lập', han:'金雞', pose:mk(CRANE_L), w:W.craneL, desc:'Gà vàng đứng một chân.',
+        cue:['Trụ chân phải','Gối trái nhấc cao ngang hông','Hai tay dang ngang'] },
+      { name:'Thu thế', han:'收勢', pose:mk(SALUTE), w:W.salute, desc:'Thu chân, chào kết thúc.',
+        cue:['Khép chân','Ôm quyền','Thở ra chậm'] },
+    ] },
+];
+
+/* ================= Lesson building ================= */
+const enc = p => p ? p.flatMap(q => [+q[0].toFixed(4), +q[1].toFixed(4), +q[2].toFixed(2)]) : null;
+const dec = a => { if(!a) return null; const p=[]; for(let i=0;i<a.length;i+=3) p.push([a[i],a[i+1],a[i+2]]); return p; };
+
+function buildLesson(def){
+  let frames, stepFrames;
+  if(def.custom){
+    frames = def.frames.map(dec);
+    let last = frames.find(Boolean);
+    frames = frames.map(p => (p ? (last = p) : last));
+    stepFrames = def.steps.map(s => clamp(s.frame, 0, frames.length-1));
+  } else {
+    frames = []; stepFrames = [];
+    def.steps.forEach((s,i) => {
+      if(i>0){ const a = def.steps[i-1].pose; for(let t=1;t<=12;t++) frames.push(lerpPose(a, s.pose, ease(t/12))); }
+      const start = frames.length; for(let t=0;t<18;t++) frames.push(s.pose);
+      stepFrames.push(start+9);
+    });
+  }
+  const steps = def.steps.map((s,i) => {
+    const pose = frames[stepFrames[i]], poseM = mirrorPose(pose), w = s.w || {};
+    const cue = Array.isArray(s.cue) ? s.cue : String(s.cue||'').split(';').map(x=>x.trim()).filter(Boolean);
+    return { ...s, cue, pose, poseM, w, wM: mirrorW(w), feats: features(pose), featsM: features(poseM), frame: stepFrames[i], han: s.han || '式' };
+  });
+  const seqStart = def.custom ? Math.max(0, stepFrames[0]-10) : 0;
+  const seqEnd = def.custom ? Math.min(frames.length-1, stepFrames[stepFrames.length-1]+10) : frames.length-1;
+  // 3D frames for the avatar: [X right=character's left, Y up, Z toward viewer]
+  let world3 = null;
+  if(def.custom && Array.isArray(def.world) && def.world.length === def.frames.length){
+    let last = null;
+    world3 = def.world.map(a => { const w = dec(a); if(w) last = w.map(q => [q[0], -q[1], -q[2]]); return last; });
+    const first = world3.find(Boolean); world3 = first ? world3.map(w => w || first) : null;
+  }
+  if(!world3) world3 = frames.map(to3D);
+  return { ...def, frames, stepFrames, steps, seqStart, seqEnd, feats: frames.map(features), world3 };
+}
+function to3D(p){ const cx = (g(p,'lh')[0]+g(p,'rh')[0])/2, cy = (g(p,'lh')[1]+g(p,'rh')[1])/2; return p.map(q => [q[0]-cx, -(q[1]-cy), q[3]||0]); }
+function pose3DAt(L, f){ const i = clamp(Math.floor(f), 0, L.world3.length-1), j = Math.min(i+1, L.world3.length-1); return lerp3(L.world3[i], L.world3[j], f - Math.floor(f)); }
+function stepAtFrame(L, f){ let s = 0; L.stepFrames.forEach((sf,i) => { if(f >= sf - 9) s = i; }); return s; }
+function poseAt(L, f){ const i = clamp(Math.floor(f), 0, L.frames.length-1), j = Math.min(i+1, L.frames.length-1); return lerpPose(L.frames[i], L.frames[j], f - Math.floor(f)); }
+
+/* ================= Storage ================= */
+const store = {
+  get(k,d){ try{ const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; }catch(e){ return d; } },
+  set(k,v){ try{ localStorage.setItem(k, JSON.stringify(v)); return true; }catch(e){ return false; } }
+};
+let customDefs = store.get('kj_custom', []);
+let progress = store.get('kj_progress', {});
+let lessons = [];
+function rebuildLessons(){
+  lessons = [...BUILTIN, ...customDefs].map(d => { try{ return buildLesson(d); }catch(e){ console.warn('Bỏ qua bài lỗi', d && d.name, e); return null; } }).filter(Boolean);
+}
+rebuildLessons();
+const lessonById = id => lessons.find(l => l.id===id) || lessons[0];
+function saveProgress(id, patch){
+  const pr = progress[id] || (progress[id] = { steps:{}, full:null });
+  if(patch.step!=null) pr.steps[patch.step] = Math.max(pr.steps[patch.step]||0, patch.score);
+  if(patch.full!=null) pr.full = Math.max(pr.full||0, patch.full);
+  store.set('kj_progress', progress);
+}
+
+/* ================= App state ================= */
+const S = {
+  view:'home', lessonId: lessons[0].id, step:0, mode:'single',
+  voice:true, ghost:true, allowMirror:true, autoNext:true, model: /Mobi|Android|iPhone/i.test(navigator.userAgent) ? 'lite' : 'full'
+};
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+let toastT;
+function toast(msg){ const t=$('#toast'); t.textContent=msg; t.classList.add('on'); clearTimeout(toastT); toastT=setTimeout(()=>t.classList.remove('on'), 2600); }
+
+/* ================= Voice + sound ================= */
+let viVoice = null;
+function pickVoice(){ try{ const vs = speechSynthesis.getVoices(); viVoice = vs.find(v => /^vi/i.test(v.lang)) || null; }catch(e){} }
+if('speechSynthesis' in window){ pickVoice(); speechSynthesis.onvoiceschanged = pickVoice; }
+function say(text, interrupt=true){
+  if(!S.voice || !('speechSynthesis' in window)) return;
+  try{
+    if(interrupt) speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(text); u.lang='vi-VN'; u.rate=1.05; if(viVoice) u.voice = viVoice;
+    speechSynthesis.speak(u);
+  }catch(e){}
+}
+let actx = null;
+function gong(){
+  try{
+    actx = actx || new (window.AudioContext||window.webkitAudioContext)();
+    const t = actx.currentTime;
+    [[196,0.5],[392,0.25],[588,0.12]].forEach(([f,a]) => {
+      const o = actx.createOscillator(), gn = actx.createGain();
+      o.type='sine'; o.frequency.value=f; gn.gain.setValueAtTime(a,t); gn.gain.exponentialRampToValueAtTime(0.001, t+1.6);
+      o.connect(gn).connect(actx.destination); o.start(t); o.stop(t+1.7);
+    });
+  }catch(e){}
+}
+
+/* ================= MediaPipe ================= */
+let landmarker = null, loadingP = null, loadedModel = null, lastTs = 0;
+function setModelStatus(s, msg){
+  const el = $('#modelStatus'); el.dataset.s = s;
+  el.querySelector('span').textContent = msg || ({ idle:'AI chưa tải', loading:'Đang tải AI…', ready:'AI sẵn sàng', error:'Lỗi tải AI' })[s];
+}
+async function ensureModel(){
+  if(landmarker && loadedModel===S.model) return landmarker;
+  if(loadingP) return loadingP;
+  loadingP = (async () => {
+    setModelStatus('loading');
+    const { PoseLandmarker, FilesetResolver } = await import(`${MP_URL}/vision_bundle.mjs`);
+    const fileset = await FilesetResolver.forVisionTasks(`${MP_URL}/wasm`);
+    const opts = delegate => ({ baseOptions:{ modelAssetPath: MODEL_URLS[S.model], delegate }, runningMode:'VIDEO', numPoses:1,
+      minPoseDetectionConfidence:.5, minPosePresenceConfidence:.5, minTrackingConfidence:.5 });
+    if(landmarker){ try{ landmarker.close(); }catch(e){} landmarker = null; }
+    try{ landmarker = await PoseLandmarker.createFromOptions(fileset, opts('GPU')); }
+    catch(e){ console.warn('GPU không khả dụng, chuyển sang CPU', e); landmarker = await PoseLandmarker.createFromOptions(fileset, opts('CPU')); }
+    loadedModel = S.model; lastTs = 0;
+    setModelStatus('ready');
+    return landmarker;
+  })().catch(e => { console.error(e); setModelStatus('error'); toast('Không tải được mô hình AI. Kiểm tra kết nối mạng rồi thử lại.'); throw e; })
+     .finally(() => { loadingP = null; });
+  return loadingP;
+}
+
+/* One Euro filter to steady landmarks without lagging fast strikes */
+class OneEuro{
+  constructor(mc=1.2, beta=6, dc=1){ this.mc=mc; this.beta=beta; this.dc=dc; this.x=null; this.dx=0; this.t=null; }
+  a(c,dt){ const tau = 1/(2*Math.PI*c); return 1/(1+tau/dt); }
+  f(x,t){
+    if(this.t==null){ this.t=t; this.x=x; this.dx=0; return x; }
+    const dt = Math.max(1e-3, (t-this.t)/1000); this.t=t;
+    const dx = (x-this.x)/dt; this.dx = this.dx + this.a(this.dc,dt)*(dx-this.dx);
+    const c = this.mc + this.beta*Math.abs(this.dx);
+    this.x = this.x + this.a(c,dt)*(x-this.x); return this.x;
+  }
+}
+let filters = [], wfilters = [], missCount = 0, lastWorld = null;
+function resetFilters(){ filters = KEYS.map(() => [new OneEuro(), new OneEuro()]); wfilters = KEYS.map(() => [new OneEuro(), new OneEuro(), new OneEuro()]); }
+resetFilters();
+
+/* Returns pose in "height units": x,y divided by frame height, plus visibility */
+function detectPose(video){
+  if(!landmarker || video.readyState < 2 || !video.videoWidth) return null;
+  let ts = performance.now(); if(ts <= lastTs) ts = lastTs + 1; lastTs = ts;
+  let res; try{ res = landmarker.detectForVideo(video, ts); }catch(e){ console.warn(e); return null; }
+  const lm = res && res.landmarks && res.landmarks[0];
+  if(!lm){ lastWorld = null; if(++missCount > 15) resetFilters(); return null; }
+  missCount = 0;
+  const wl = res.worldLandmarks && res.worldLandmarks[0];
+  lastWorld = wl ? MP_IDX.map((mi,k) => [wfilters[k][0].f(wl[mi].x, ts), wfilters[k][1].f(wl[mi].y, ts), wfilters[k][2].f(wl[mi].z, ts)]) : null;
+  const asp = video.videoWidth / video.videoHeight;
+  return MP_IDX.map((mi,k) => {
+    const q = lm[mi]; let v = q.visibility ?? 1;
+    if(q.x < -0.02 || q.x > 1.02 || q.y < -0.02 || q.y > 1.02) v = Math.min(v, 0.2);
+    return [filters[k][0].f(q.x*asp, ts), filters[k][1].f(q.y, ts), v];
+  });
+}
+
+let stream = null;
+async function startCamera(video){
+  if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) throw Object.assign(new Error('no-media'), { name:'NoMedia' });
+  if(!stream) stream = await navigator.mediaDevices.getUserMedia({ video:{ facingMode:'user', width:{ ideal:1280 }, height:{ ideal:720 } }, audio:false });
+  if(video.srcObject !== stream){ video.removeAttribute('src'); video.srcObject = stream; }
+  await video.play(); resetFilters();
+}
+function stopCamera(){
+  if(stream){ stream.getTracks().forEach(t => t.stop()); stream = null; }
+  for(const v of [$('#pvideo'), $('#svideo')]) if(v.srcObject){ v.pause(); v.srcObject = null; }
+  P.camOn = false; $('#pEmpty').hidden = false;
+  ST.camOn = false; $('#sRec').disabled = true;
+}
+function camErrorText(e){
+  if(e && e.name==='NotAllowedError') return 'Trình duyệt đang chặn camera. Bấm biểu tượng camera trên thanh địa chỉ, chọn Cho phép, rồi thử lại.';
+  if(e && e.name==='NotFoundError') return 'Không tìm thấy camera trên thiết bị này.';
+  if(e && e.name==='NoMedia') return 'Trình duyệt không cho dùng camera ở đây. Mở file bằng Chrome hoặc Edge, qua localhost hoặc https.';
+  return 'Không mở được camera: ' + (e && e.message || e);
+}
+
+/* ================= Drawing ================= */
+const COL = { good:'#5fb985', warn:'#e8a33d', bad:'#ec5b45', paper:'#f1e6cf', gold:'#d9a54a', cin:'#d4432c', ink:'#15110f', line:'#3b3028' };
+const ndColor = nd => nd==null ? 'rgba(241,230,207,.8)' : nd<=1 ? COL.good : nd<=1.6 ? COL.warn : COL.bad;
+const BONES = [['ls','rs','torso'],['ls','lh','torso'],['rs','rh','torso'],['lh','rh','torso'],
+  ['ls','le','lShoulder'],['le','lw','lElbow'],['rs','re','rShoulder'],['re','rw','rElbow'],
+  ['lh','lk','lHip'],['lk','la','lKnee'],['rh','rk','rHip'],['rk','ra','rKnee']];
+
+function fitCanvas(cv){
+  const dpr = Math.min(2, window.devicePixelRatio||1), w = cv.clientWidth, h = cv.clientHeight;
+  if(!w || !h) return null;
+  const W2 = Math.round(w*dpr), H2 = Math.round(h*dpr);
+  if(cv.width!==W2 || cv.height!==H2){ cv.width=W2; cv.height=H2; }
+  const ctx = cv.getContext('2d'); ctx.setTransform(dpr,0,0,dpr,0,0); ctx.clearRect(0,0,w,h);
+  return { ctx, w, h };
+}
+
+/* o: {cx, unit, mirror, anchor:'ground'|'hip', groundY, hipY, style:'ink'|'ghost'|'skeleton', colors, color} */
+function drawFigure(ctx, p, o){
+  if(!p) return;
+  const T = torsoLen(p), hip = mid(g(p,'lh'), g(p,'rh')), sg = o.mirror ? -1 : 1, u = o.unit;
+  let maxY = -1e9; p.forEach(q => { if(q[2] >= VIS) maxY = Math.max(maxY, q[1]); });
+  const X = q => o.cx + sg*(q[0]-hip[0])/T*u;
+  const Y = q => o.anchor==='hip' ? o.hipY + (q[1]-hip[1])/T*u : o.groundY - (maxY-q[1])/T*u;
+  const P = {}; KEYS.forEach(k => { const q = g(p,k); P[k] = q[2] >= VIS ? [X(q), Y(q)] : null; });
+  ctx.save(); ctx.lineCap='round'; ctx.lineJoin='round';
+  const line = (a,b,w,c) => { if(!a||!b) return; ctx.strokeStyle=c; ctx.lineWidth=w; ctx.beginPath(); ctx.moveTo(a[0],a[1]); ctx.lineTo(b[0],b[1]); ctx.stroke(); };
+  const headR = u*0.19;
+
+  if(o.style==='skeleton'){
+    const cols = o.colors || {}, lw = Math.max(3, u*0.07);
+    BONES.forEach(([a,b,f]) => line(P[a], P[b], lw, cols[f] || o.color || 'rgba(241,230,207,.85)'));
+    KEYS.forEach(k => { if(!P[k] || k==='nose') return; ctx.fillStyle='#15110f'; ctx.beginPath(); ctx.arc(P[k][0],P[k][1],lw*0.9,0,7); ctx.fill();
+      ctx.fillStyle = o.color || '#f1e6cf'; ctx.beginPath(); ctx.arc(P[k][0],P[k][1],lw*0.55,0,7); ctx.fill(); });
+    if(P.nose){ ctx.strokeStyle = o.color || 'rgba(241,230,207,.85)'; ctx.lineWidth = lw*0.7; ctx.beginPath(); ctx.arc(P.nose[0],P.nose[1],headR,0,7); ctx.stroke(); }
+    ctx.restore(); return;
+  }
+
+  const ghost = o.style==='ghost';
+  const ink = o.color || (ghost ? 'rgba(217,165,74,.6)' : COL.paper);
+  const thin = Math.max(2, u*0.05);
+  if(!ghost && o.anchor!=='hip' && P.la && P.ra){
+    ctx.fillStyle='rgba(0,0,0,.35)'; ctx.beginPath();
+    ctx.ellipse((P.la[0]+P.ra[0])/2, o.groundY+2, Math.abs(P.la[0]-P.ra[0])/2+u*0.35, u*0.08, 0, 0, 7); ctx.fill();
+  }
+  const legW = ghost ? thin : u*0.16, armW = ghost ? thin : u*0.12;
+  [['rh','rk'],['rk','ra'],['lh','lk'],['lk','la']].forEach(([a,b]) => line(P[a],P[b],legW,ink));
+  if(P.ls && P.rs && P.lh && P.rh){
+    ctx.beginPath(); ctx.moveTo(...P.ls); ctx.lineTo(...P.rs); ctx.lineTo(...P.rh); ctx.lineTo(...P.lh); ctx.closePath();
+    if(ghost){ ctx.strokeStyle=ink; ctx.lineWidth=thin; ctx.stroke(); }
+    else { ctx.fillStyle=ink; ctx.fill(); ctx.strokeStyle=ink; ctx.lineWidth=u*0.1; ctx.stroke(); }
+  }
+  if(!ghost && P.lh && P.rh){
+    line(P.lh, P.rh, u*0.11, COL.cin);
+    line(P.lh, [P.lh[0] + (P.lh[0]-P.rh[0])*0.25, P.lh[1] + u*0.32], u*0.06, COL.cin);
+  }
+  [['ls','le'],['le','lw'],['rs','re'],['re','rw']].forEach(([a,b]) => line(P[a],P[b],armW,ink));
+  ['lw','rw'].forEach(k => { if(!P[k]) return; ctx.beginPath(); ctx.arc(P[k][0],P[k][1],ghost?u*0.05:u*0.075,0,7);
+    if(ghost){ ctx.strokeStyle=ink; ctx.lineWidth=thin; ctx.stroke(); } else { ctx.fillStyle=ink; ctx.fill(); } });
+  if(P.nose){
+    if(P.ls && P.rs){ const n = mid(P.ls,P.rs); line(n, [P.nose[0], P.nose[1]+headR*0.6], ghost?thin:u*0.1, ink); }
+    ctx.beginPath(); ctx.arc(P.nose[0], P.nose[1], headR, 0, 7);
+    if(ghost){ ctx.strokeStyle=ink; ctx.lineWidth=thin; ctx.stroke(); }
+    else { ctx.fillStyle=ink; ctx.fill(); ctx.fillStyle=COL.cin; ctx.fillRect(P.nose[0]-headR, P.nose[1]-headR*0.45, headR*2, headR*0.28); }
+  }
+  ctx.restore();
+}
+/* Full scene used by learn / reference / hero canvases */
+function drawScene(cv, pose, opt={}){
+  const c = fitCanvas(cv); if(!c) return;
+  const { ctx, w, h } = c, groundY = h*0.9, unit = Math.min(h/4.1, w/3.4);
+  ctx.strokeStyle = 'rgba(241,230,207,.16)'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(w*0.12, groundY+3); ctx.lineTo(w*0.88, groundY+3); ctx.stroke();
+  if(opt.ghostPose) drawFigure(ctx, opt.ghostPose, { cx:w/2, unit, mirror:true, anchor:'ground', groundY, style:'ghost', color:'rgba(241,230,207,.14)' });
+  drawFigure(ctx, pose, { cx:w/2, unit, mirror:true, anchor:'ground', groundY, style:'ink', color: opt.color });
+}
+
+/* ================= 3D avatar (three.js + rigged GLB) ================= */
+const CHAR_BASES = ['https://cdn.jsdelivr.net/gh/mrdoob/three.js@r160/examples/models/gltf/', 'https://threejs.org/examples/models/gltf/'];
+const KJ_REPO = 'https://cdn.jsdelivr.net/gh/hoangvinh1601/kungfu-journey@main/';
+const own = f => [`models/${f}`, KJ_REPO + `models/${f}`];   // built in Blender, shipped with the app
+const CHARACTERS = [
+  { id:'vovinam',  name:'Võ sinh Vovinam',      urls: own('vovinam.glb') },
+  { id:'monk',     name:'Tăng nhân Thiếu Lâm',  urls: own('monk.glb') },
+  { id:'heroine',  name:'Nữ hiệp',              urls: own('heroine.glb') },
+  { id:'wooden',   name:'Mộc nhân',             urls: own('wooden.glb') },
+  { id:'michelle', name:'Michelle (Mixamo)',    file:'Michelle.glb' },
+  { id:'xbot',     name:'X Bot (Mixamo)',       file:'Xbot.glb' },
+  { id:'soldier',  name:'Soldier (Mixamo)',     file:'Soldier.glb' },
+];
+const V3 = { ok:false, failed:false, loading:null, mirror:true, auto:false, bones:false, keys:true,
+  charId: store.get('kj_char', 'vovinam'), host:null, camAnim:null, size:[0,0], avatar:null };
+let T3 = null;
+
+const BONE_ALIASES = {
+  hips:['hips','pelvis','hip'], spine:['spine','spine01','spine1'], chest:['spine2','spine03','upperchest','chest','spine02','spine1'],
+  neck:['neck','neck01'], head:['head'],
+  lArm:['leftarm','upperarml','leftupperarm','larm','arml'], lFore:['leftforearm','lowerarml','leftlowerarm','forearml','elbowl'], lHand:['lefthand','handl','wristl'],
+  lUpLeg:['leftupleg','thighl','leftupperleg','upperlegl','legupperl'], lLeg:['leftleg','calfl','leftlowerleg','lowerlegl','shinl','kneel'],
+  lFoot:['leftfoot','footl','anklel'], lToe:['lefttoebase','balll','lefttoes','toesl','toel','toebasel'],
+};
+for(const k of Object.keys(BONE_ALIASES)) if(k[0]==='l' && k[1]!=='e')
+  BONE_ALIASES['r'+k.slice(1)] = BONE_ALIASES[k].map(a => a.startsWith('left') ? 'right'+a.slice(4) : a.replace(/l$/, 'r').replace(/^larm$/, 'rarm'));
+const normName = n => n.toLowerCase().replace(/[^a-z0-9]/g, '').replace(/^(armature)?mixamorig\d*/, '');
+const FEAT_BONE = { lKnee:'lLeg', rKnee:'rLeg', lElbow:'lFore', rElbow:'rFore', lShoulder:'lArm', rShoulder:'rArm', lHip:'lUpLeg', rHip:'rUpLeg', torso:'chest' };
+const swapFeat = k => /^[lr][A-Z]/.test(k) ? (k[0]==='l' ? 'r' : 'l') + k.slice(1) : k;
+function keyJoints(step){
+  if(!step || !step.w) return [];
+  return Object.entries(step.w).filter(([k,w]) => w >= 1.2 && FEAT_BONE[k]).sort((a,b) => b[1]-a[1]).slice(0,6).map(([k]) => k);
+}
+
+function setV3Status(msg){ document.querySelectorAll('.v3d-load').forEach(e => e.textContent = msg || ''); }
+const wpos = o => o.getWorldPosition(new T3.Vector3());
+function rotateWorld(bone, q){
+  const wq = bone.getWorldQuaternion(new T3.Quaternion()), pq = bone.parent.getWorldQuaternion(new T3.Quaternion());
+  bone.quaternion.copy(pq.invert().multiply(q.clone().multiply(wq))); bone.updateMatrixWorld(true);
+}
+function aimBone(bone, child, dir){
+  if(!bone || !child || dir.lengthSq() < 1e-10) return;
+  const cur = wpos(child).sub(wpos(bone)); if(cur.lengthSq() < 1e-10) return;
+  rotateWorld(bone, new T3.Quaternion().setFromUnitVectors(cur.normalize(), dir.clone().normalize()));
+}
+function twistBone(bone, l, r, target, axis){
+  const ax = axis.clone().normalize(), proj = v => v.sub(ax.clone().multiplyScalar(v.dot(ax)));
+  const c = proj(wpos(l).sub(wpos(r))), t = proj(target.clone());
+  if(c.lengthSq() < 1e-8 || t.lengthSq() < 1e-8) return;
+  rotateWorld(bone, new T3.Quaternion().setFromUnitVectors(c.normalize(), t.normalize()));
+}
+function basisQ(xv, yv){
+  const x = xv.clone().normalize(), z = new T3.Vector3().crossVectors(x, yv).normalize(), y = new T3.Vector3().crossVectors(z, x);
+  return new T3.Quaternion().setFromRotationMatrix(new T3.Matrix4().makeBasis(x, y, z));
+}
+
+function makeMat(){
+  const c = document.createElement('canvas'); c.width = c.height = 1024; const x = c.getContext('2d');
+  const gr = x.createRadialGradient(512,512,30,512,512,512);
+  gr.addColorStop(0,'#5a2a1c'); gr.addColorStop(.62,'#33190f'); gr.addColorStop(.93,'#1f130d'); gr.addColorStop(1,'rgba(31,19,13,0)');
+  x.fillStyle = gr; x.beginPath(); x.arc(512,512,512,0,7); x.fill();
+  x.strokeStyle = 'rgba(217,165,74,.9)'; x.lineWidth = 12; x.beginPath(); x.arc(512,512,462,0,7); x.stroke();
+  x.strokeStyle = 'rgba(217,165,74,.45)'; x.lineWidth = 3; x.beginPath(); x.arc(512,512,432,0,7); x.stroke();
+  x.fillStyle = 'rgba(217,165,74,.6)';
+  for(let i=0;i<8;i++){ x.save(); x.translate(512,512); x.rotate(i*Math.PI/4);
+    for(let k=0;k<3;k++){ const y = -408 + k*17; if(((i>>k)&1)===0){ x.fillRect(-48,y,40,9); x.fillRect(8,y,40,9); } else x.fillRect(-48,y,96,9); }
+    x.restore(); }
+  x.strokeStyle = 'rgba(241,230,207,.07)'; x.lineWidth = 2; [140,250].forEach(r => { x.beginPath(); x.arc(512,512,r,0,7); x.stroke(); });
+  const tex = new T3.CanvasTexture(c); tex.colorSpace = T3.SRGBColorSpace; tex.anisotropy = 4;
+  const mesh = new T3.Mesh(new T3.CircleGeometry(1.75, 96), new T3.MeshStandardMaterial({ map:tex, roughness:.85, transparent:true }));
+  mesh.rotation.x = -Math.PI/2; mesh.receiveShadow = true; return mesh;
+}
+
+function curlFingers(bones){
+  const get = n => bones.find(o => normName(o.name) === n);
+  for(const side of ['left','right']){
+    const hand = get(side+'hand'), i1 = get(side+'handindex1'), p1 = get(side+'handpinky1') || get(side+'handring1');
+    if(!hand || !i1 || !p1) continue;
+    const palm = () => { const hp = wpos(hand), n = new T3.Vector3().crossVectors(wpos(i1).sub(hp), wpos(p1).sub(hp)).normalize(); if(n.y > 0) n.negate(); return n; };
+    const curl = (bone, deg) => {
+      if(!bone || !bone.children.length) return;
+      const dir = wpos(bone.children[0]).sub(wpos(bone)).normalize(), axis = new T3.Vector3().crossVectors(dir, palm());
+      if(axis.lengthSq() < 0.05) return;
+      rotateWorld(bone, new T3.Quaternion().setFromAxisAngle(axis.normalize(), deg*Math.PI/180));
+    };
+    for(const f of ['index','middle','ring','pinky']) [[1,70],[2,95],[3,70]].forEach(([j,d]) => curl(get(side+'hand'+f+j), d));
+    curl(get(side+'handthumb2'), 30); curl(get(side+'handthumb3'), 35);
+  }
+}
+
+function buildAvatar(model){
+  const byName = {}, bones = [];
+  model.traverse(o => {
+    if(o.isBone){ bones.push(o); const n = normName(o.name); if(!(n in byName)) byName[n] = o; }
+    if(o.isMesh){ o.castShadow = true; o.frustumCulled = false; }
+  });
+  const b = {};
+  for(const [k, al] of Object.entries(BONE_ALIASES)) for(const a of al) if(byName[a] && !b[k]){ b[k] = byName[a]; }
+  if(b.chest === b.spine) b.chest = byName.spine2 || byName.chest || b.spine;
+  const need = ['hips','spine','neck','lArm','lFore','lHand','rArm','rFore','rHand','lUpLeg','lLeg','lFoot','rUpLeg','rLeg','rFoot'];
+  const missing = need.filter(k => !b[k]); if(missing.length) return { missing };
+  const root = new T3.Group(); root.add(model); root.updateMatrixWorld(true);
+  const box = new T3.Box3(); bones.forEach(o => box.expandByPoint(wpos(o)));
+  const s = 1.68 / Math.max(1e-6, box.max.y - box.min.y), hip0 = wpos(b.hips);
+  root.scale.setScalar(s); root.position.set(-hip0.x*s, -box.min.y*s + 0.035, -hip0.z*s); root.updateMatrixWorld(true);
+  curlFingers(bones);
+  bones.forEach(o => o.userData.rest = o.quaternion.clone());
+  root.updateMatrixWorld(true);
+  const feet = [b.lFoot, b.rFoot, b.lToe, b.rToe].filter(Boolean);
+  const footMin = Math.min(...feet.map(f => wpos(f).y));
+  const restFootQ = { l: b.lFoot.getWorldQuaternion(new T3.Quaternion()), r: b.rFoot.getWorldQuaternion(new T3.Quaternion()) };
+  const restFwd = new T3.Vector3().crossVectors(wpos(b.lUpLeg).sub(wpos(b.rUpLeg)), wpos(b.neck).sub(wpos(b.hips))); restFwd.y = 0; restFwd.normalize();
+  return { root, model, b, bones, restPos: root.position.clone(), footMin, feet, restFootQ, restFwd };
+}
+
+function applyPose3D(pts){
+  const av = V3.avatar; if(!av || !pts) return;
+  av.bones.forEach(o => o.quaternion.copy(o.userData.rest)); av.root.position.copy(av.restPos); av.root.updateMatrixWorld(true);
+  const P = k => { const q = pts[KI[k]]; return new T3.Vector3(q[0], q[1], q[2]); }, b = av.b;
+  const lh = P('lh'), rh = P('rh'), ls = P('ls'), rs = P('rs');
+  const up = ls.clone().add(rs).sub(lh).sub(rh).multiplyScalar(.5);
+  const qT = basisQ(lh.clone().sub(rh), up), qC = basisQ(wpos(b.lUpLeg).sub(wpos(b.rUpLeg)), wpos(b.neck).sub(wpos(b.hips)));
+  rotateWorld(b.hips, qT.multiply(qC.invert()));
+  aimBone(b.spine, b.neck, up);
+  twistBone(b.chest, b.lArm, b.rArm, ls.clone().sub(rs), up);
+  aimBone(b.lArm, b.lFore, P('le').sub(ls)); aimBone(b.lFore, b.lHand, P('lw').sub(P('le')));
+  aimBone(b.rArm, b.rFore, P('re').sub(rs)); aimBone(b.rFore, b.rHand, P('rw').sub(P('re')));
+  aimBone(b.lUpLeg, b.lLeg, P('lk').sub(lh)); aimBone(b.lLeg, b.lFoot, P('la').sub(P('lk')));
+  aimBone(b.rUpLeg, b.rLeg, P('rk').sub(rh)); aimBone(b.rLeg, b.rFoot, P('ra').sub(P('rk')));
+  // keep the soles flat and turned with the body
+  const fwd = new T3.Vector3().crossVectors(lh.clone().sub(rh), up); fwd.y = 0;
+  if(fwd.lengthSq() > 1e-8){
+    const yaw = new T3.Quaternion().setFromUnitVectors(av.restFwd, fwd.normalize());
+    for(const [f,k] of [[b.lFoot,'l'],[b.rFoot,'r']]){
+      const pq = f.parent.getWorldQuaternion(new T3.Quaternion());
+      f.quaternion.copy(pq.invert().multiply(yaw.clone().multiply(av.restFootQ[k]))); f.updateMatrixWorld(true);
+    }
+  }
+  const minY = Math.min(...av.feet.map(f => wpos(f).y));
+  av.root.position.y += av.footMin - minY; av.root.updateMatrixWorld(true);
+}
+
+async function loadCharacter(src){
+  const loader = new V3.GLTFLoader(); let gltf = null, err = null;
+  setV3Status('Đang tải nhân vật 3D…');
+  if(src instanceof File){ gltf = await loader.parseAsync(await src.arrayBuffer(), ''); }
+  else {
+    const c = CHARACTERS.find(c => c.id===src) || CHARACTERS[0];
+    for(const url of (c.urls || CHAR_BASES.map(b => b + c.file))){ try{ gltf = await loader.loadAsync(url); break; }catch(e){ err = e; } }
+    if(!gltf) throw err || new Error('load failed');
+  }
+  const av = buildAvatar(gltf.scene);
+  if(!av.root){ setV3Status(''); throw new Error('Nhân vật thiếu xương: ' + av.missing.join(', ') + '. Cần khung xương người kiểu Mixamo.'); }
+  if(V3.avatar){ V3.scene.remove(V3.avatar.root); V3.avatar.root.traverse(o => { if(o.isMesh){ o.geometry.dispose(); [].concat(o.material).forEach(m => { m.map && m.map.dispose(); m.dispose(); }); } }); }
+  if(V3.skel){ V3.scene.remove(V3.skel); V3.skel = null; }
+  V3.scene.add(av.root); V3.avatar = av;
+  if(V3.bones) toggleSkeleton(true);
+  setV3Status('');
+}
+function toggleSkeleton(on){
+  if(V3.skel){ V3.scene.remove(V3.skel); V3.skel = null; }
+  if(on && V3.avatar){ V3.skel = new T3.SkeletonHelper(V3.avatar.root); V3.skel.material.color = new T3.Color(0xd9a54a); V3.skel.material.depthTest = false; V3.skel.renderOrder = 15; V3.scene.add(V3.skel); }
+}
+
+async function init3D(){
+  if(V3.ok || V3.failed) return; if(V3.loading) return V3.loading;
+  V3.loading = (async () => {
+    setV3Status('Đang tải nhân vật 3D…');
+    T3 = await import('three');
+    const [{ GLTFLoader }, { OrbitControls }] = await Promise.all([import('three/addons/loaders/GLTFLoader.js'), import('three/addons/controls/OrbitControls.js')]);
+    V3.GLTFLoader = GLTFLoader;
+    const r = new T3.WebGLRenderer({ antialias:true, alpha:true });
+    r.setPixelRatio(Math.min(2, window.devicePixelRatio||1));
+    r.outputColorSpace = T3.SRGBColorSpace; r.toneMapping = T3.ACESFilmicToneMapping; r.toneMappingExposure = 1.1;
+    r.shadowMap.enabled = true; r.shadowMap.type = T3.PCFSoftShadowMap;
+    r.domElement.className = 'v3d-canvas'; r.domElement.setAttribute('aria-label', 'Nhân vật 3D. Kéo để xoay, cuộn để phóng to');
+    const scene = new T3.Scene();
+    const cam = new T3.PerspectiveCamera(30, 1, 0.05, 60); cam.position.set(0, 1.3, 5);
+    const ctr = new OrbitControls(cam, r.domElement);
+    ctr.target.set(0, 0.78, 0); ctr.enableDamping = true; ctr.dampingFactor = 0.08; ctr.enablePan = false;
+    ctr.minDistance = 1.6; ctr.maxDistance = 9; ctr.maxPolarAngle = Math.PI*0.9; ctr.autoRotateSpeed = 1.5; ctr.update();
+    ctr.addEventListener('start', () => { V3.camAnim = null; });
+    scene.add(new T3.HemisphereLight(0xfff1dc, 0x3a2418, 1.3));
+    const key = new T3.DirectionalLight(0xfff0dd, 2.4); key.position.set(-2.2, 4.5, 3.2); key.castShadow = true;
+    key.shadow.mapSize.set(1024, 1024); Object.assign(key.shadow.camera, { left:-2, right:2, top:2.6, bottom:-1, near:.5, far:12 });
+    key.shadow.bias = -0.0005; key.shadow.normalBias = 0.02; scene.add(key);
+    const rim = new T3.DirectionalLight(0xd4432c, 1.8); rim.position.set(2.5, 2.4, -3); scene.add(rim);
+    const fill = new T3.DirectionalLight(0xd9a54a, 0.5); fill.position.set(3, 1, 2); scene.add(fill);
+    scene.add(makeMat());
+    V3.markers = [];
+    for(let i=0;i<6;i++){
+      const m = new T3.Mesh(new T3.SphereGeometry(0.03, 20, 14), new T3.MeshBasicMaterial({ color:0xd9a54a, transparent:true, opacity:.95, depthTest:false }));
+      const ring = new T3.Mesh(new T3.RingGeometry(0.05, 0.06, 40), new T3.MeshBasicMaterial({ color:0xf1e6cf, transparent:true, opacity:.55, depthTest:false, side:T3.DoubleSide }));
+      m.add(ring); m.renderOrder = ring.renderOrder = 20; m.visible = false; scene.add(m); V3.markers.push(m);
+    }
+    Object.assign(V3, { renderer:r, scene, cam, ctr });
+    await loadCharacter(V3.charId).catch(async e => { console.warn(e); V3.charId = V3.charId==='michelle' ? 'xbot' : 'michelle'; await loadCharacter(V3.charId); });
+    V3.ok = true;
+    document.querySelectorAll('.v3d').forEach(h => h.classList.add('has3d'));
+    syncBars();
+  })().catch(e => { console.error(e); V3.failed = true; setV3Status(''); toast('Không tải được nhân vật 3D, ứng dụng dùng hình minh hoạ 2D.'); });
+  return V3.loading;
+}
+
+const CAM_VIEWS = { front:[0,80], diag:[40,76], side:[90,80], back:[180,78], top:[20,26] };
+function camPreset(name){
+  if(!V3.ok) return;
+  const [az, pol] = CAM_VIEWS[name], from = new T3.Spherical().setFromVector3(V3.cam.position.clone().sub(V3.ctr.target));
+  let dt = az*Math.PI/180 - from.theta; dt = Math.atan2(Math.sin(dt), Math.cos(dt));
+  V3.camAnim = { t:0, from, theta: from.theta + dt, phi: pol*Math.PI/180 };
+  V3.auto = false; syncBars();
+}
+function fitDistance(){
+  const tan = Math.tan(V3.cam.fov*Math.PI/360), asp = V3.cam.aspect;
+  return Math.max(1.08/tan, (asp < 0.9 ? 0.95 : 1.2)/(tan*asp)) + 0.2;
+}
+function render3D(host, pts, opt = {}){
+  if(!V3.ok || !V3.avatar) return false;
+  const cv = V3.renderer.domElement;
+  if(cv.parentElement !== host){ host.insertBefore(cv, host.querySelector('.v3d-bar')); V3.size = [0,0]; }
+  const w = host.clientWidth, h = host.clientHeight; if(!w || !h) return true;
+  if(w !== V3.size[0] || h !== V3.size[1]){
+    V3.renderer.setSize(w, h, false); V3.cam.aspect = w/h; V3.cam.updateProjectionMatrix(); V3.size = [w, h];
+    const dir = V3.cam.position.clone().sub(V3.ctr.target).normalize(); V3.cam.position.copy(V3.ctr.target).addScaledVector(dir, fitDistance());
+  }
+  if(pts) applyPose3D(V3.mirror ? mirror3(pts) : pts);
+  const keys = V3.keys ? (opt.keys || []).map(k => V3.mirror ? swapFeat(k) : k) : [];
+  V3.markers.forEach((m, i) => {
+    const bn = keys[i] && V3.avatar.b[FEAT_BONE[keys[i]]];
+    m.visible = !!bn; if(bn){ bn.getWorldPosition(m.position); m.quaternion.copy(V3.cam.quaternion); const s = 1 + 0.12*Math.sin(performance.now()/260); m.scale.setScalar(s); }
+  });
+  if(V3.camAnim){
+    const a = V3.camAnim; a.t = Math.min(1, a.t + 0.045); const e = ease(a.t);
+    const sp = new T3.Spherical(a.from.radius, a.from.phi + (a.phi - a.from.phi)*e, a.from.theta + (a.theta - a.from.theta)*e);
+    V3.cam.position.copy(V3.ctr.target).add(new T3.Vector3().setFromSpherical(sp));
+    if(a.t >= 1) V3.camAnim = null;
+  }
+  V3.ctr.autoRotate = !!opt.autoRotate || V3.auto;
+  V3.ctr.update(); V3.renderer.render(V3.scene, V3.cam);
+  return true;
+}
+
+/* viewer toolbars */
+function buildBars(){
+  document.querySelectorAll('.v3d[data-bar]').forEach(host => {
+    const full = host.dataset.bar === 'full';
+    const views = full ? [['front','Chính diện'],['diag','Chéo 45°'],['side','Ngang'],['back','Sau lưng'],['top','Từ trên']] : [['front','Trước'],['diag','45°'],['side','Ngang'],['back','Sau']];
+    host.insertAdjacentHTML('beforeend', `
+      <span class="v3d-hint">${full ? 'Kéo để xoay 360° · cuộn để phóng to' : 'Kéo để xoay'}</span>
+      <span class="v3d-load"></span>
+      <div class="v3d-bar">
+        ${views.map(([k,l]) => `<button type="button" data-v3="cam:${k}">${l}</button>`).join('')}
+        <button type="button" data-v3="toggle:auto">Tự xoay</button>
+        <button type="button" data-v3="toggle:mirror" title="Đảo trái phải như đứng trước gương">Soi gương</button>
+        ${full ? `<button type="button" data-v3="follow" title="Đứng sau lưng võ sư, không soi gương">Tập sau lưng thầy</button>
+        <button type="button" data-v3="toggle:keys">Khớp trọng tâm</button>
+        <button type="button" data-v3="toggle:bones">Khung xương</button>
+        <span class="sep"></span>
+        <select data-v3char aria-label="Chọn nhân vật">${CHARACTERS.map(c => `<option value="${c.id}">${c.name}</option>`).join('')}<option value="__file" disabled>Nhân vật từ file</option></select>
+        <label class="file">Tải .glb<input type="file" accept=".glb,.gltf,model/gltf-binary" data-v3file></label>` : ''}
+      </div>`);
+  });
+  document.querySelectorAll('.v3d:not([data-bar])').forEach(host => host.insertAdjacentHTML('beforeend', '<span class="v3d-load"></span>'));
+}
+function syncBars(){
+  document.querySelectorAll('[data-v3="toggle:auto"]').forEach(b => b.classList.toggle('on', V3.auto));
+  document.querySelectorAll('[data-v3="toggle:mirror"]').forEach(b => b.classList.toggle('on', V3.mirror));
+  document.querySelectorAll('[data-v3="toggle:keys"]').forEach(b => b.classList.toggle('on', V3.keys));
+  document.querySelectorAll('[data-v3="toggle:bones"]').forEach(b => b.classList.toggle('on', V3.bones));
+  document.querySelectorAll('[data-v3="follow"]').forEach(b => b.classList.toggle('on', !V3.mirror && V3.followed));
+  document.querySelectorAll('[data-v3char]').forEach(s => { s.value = V3.charId; });
+}
+document.addEventListener('click', e => {
+  const b = e.target.closest('[data-v3]'); if(!b) return;
+  const [act, arg] = b.dataset.v3.split(':');
+  if(act==='cam') camPreset(arg);
+  if(act==='toggle'){
+    if(arg==='auto') V3.auto = !V3.auto;
+    if(arg==='mirror'){ V3.mirror = !V3.mirror; V3.followed = false; }
+    if(arg==='keys') V3.keys = !V3.keys;
+    if(arg==='bones'){ V3.bones = !V3.bones; toggleSkeleton(V3.bones); }
+  }
+  if(act==='follow'){ V3.mirror = false; V3.followed = true; camPreset('back'); toast('Góc nhìn sau lưng võ sư: bạn làm theo y hệt, không cần đảo trái phải.'); }
+  syncBars();
+});
+document.addEventListener('change', async e => {
+  if(e.target.matches('[data-v3char]')){
+    const id = e.target.value;
+    try{ await loadCharacter(id); V3.charId = id; store.set('kj_char', id); }catch(err){ toast('Không tải được nhân vật này.'); }
+    syncBars();
+  }
+  if(e.target.matches('[data-v3file]')){
+    const f = e.target.files[0]; e.target.value = ''; if(!f || !V3.ok) return;
+    try{ await loadCharacter(f); V3.charId = '__file'; document.querySelectorAll('[data-v3char]').forEach(s => s.value = '__file'); toast(`Đã dùng nhân vật “${f.name}”`); }
+    catch(err){ toast(err.message || 'File nhân vật không hợp lệ.'); syncBars(); }
+  }
+});
+buildBars();
+
+/* ================= Navigation ================= */
+const VIEWS = ['home','learn','practice','studio'];
+function showView(v){
+  if(!VIEWS.includes(v)) v = 'home';
+  const prev = S.view; S.view = v;
+  document.querySelectorAll('.view').forEach(el => el.classList.toggle('active', el.id==='view-'+v));
+  document.querySelectorAll('.nav a').forEach(a => a.classList.toggle('on', a.dataset.view===v));
+  if((prev==='practice' || prev==='studio') && prev!==v){ stopCamera(); if(P.state!=='idle') abortFull(); }
+  if(v==='home') renderHome();
+  if(v==='learn') renderLearn();
+  if(v==='practice'){ renderPractice(); ensureModel().catch(()=>{}); }
+  if(v==='studio'){ renderStudio(); ensureModel().catch(()=>{}); }
+  window.scrollTo({ top:0 });
+}
+function go(v){ if(location.hash !== '#'+v) location.hash = v; else showView(v); }
+window.addEventListener('hashchange', () => showView(location.hash.slice(1)));
+document.addEventListener('click', e => { const b = e.target.closest('[data-go]'); if(b) go(b.dataset.go); });
+
+function fillLessonSelects(){
+  const html = lessons.map(l => `<option value="${esc(l.id)}">${esc(l.name)}${l.custom?' (võ sư)':''}</option>`).join('');
+  document.querySelectorAll('.lesson-select').forEach(sel => { sel.innerHTML = html; sel.value = S.lessonId; });
+}
+document.querySelectorAll('.lesson-select').forEach(sel => sel.addEventListener('change', () => {
+  S.lessonId = sel.value; S.step = 0; LA.t = 0; LA.all = false;
+  if(S.view==='learn') renderLearn(); else { if(P.state!=='idle') abortFull(); renderPractice(); }
+}));
+
+/* ================= HOME ================= */
+function renderHome(){
+  const passedOf = L => { const pr = progress[L.id]; return L.steps.filter((s,i) => pr && (pr.steps[i]||0) >= PASS).length; };
+  $('#journey').innerHTML = lessons.map((L,i) => {
+    const pr = progress[L.id], passed = passedOf(L), pct = Math.round(100*passed/L.steps.length);
+    return `<article class="stage-card">
+      <div class="node"><span class="${pct===100?'done':''}">${i+1}</span></div>
+      <div class="sc-body">
+        <div class="sc-top"><span class="han-big">${esc(L.han||'式')}</span>
+          <div><p class="eyebrow">Chặng ${i+1} · ${esc(L.level)}${L.custom?' · Bài của võ sư':''}</p><h3>${esc(L.name)}</h3></div></div>
+        <p class="muted">${esc(L.desc)}</p>
+        <div class="meta"><span>${L.steps.length} bước</span><span>Đã đạt ${passed}/${L.steps.length} bước</span><span>Cả bài: ${pr && pr.full!=null ? Math.round(pr.full)+' điểm' : 'chưa tập'}</span></div>
+        <div class="bar" aria-label="Tiến độ ${pct}%"><i style="width:${pct}%"></i></div>
+        <div class="row">
+          <button class="btn primary small" data-act="learn" data-id="${esc(L.id)}">Học từng bước</button>
+          <button class="btn small" data-act="single" data-id="${esc(L.id)}">Luyện từng động tác</button>
+          <button class="btn ghost small" data-act="full" data-id="${esc(L.id)}">Luyện cả bài</button>
+        </div>
+      </div></article>`;
+  }).join('');
+}
+$('#journey').addEventListener('click', e => {
+  const b = e.target.closest('[data-act]'); if(!b) return;
+  S.lessonId = b.dataset.id; S.step = 0; LA.t = 0; LA.all = false;
+  if(b.dataset.act==='learn') go('learn');
+  else { S.mode = b.dataset.act; go('practice'); }
+});
+const HERO = { L:null, t:0 };
+
+/* ================= LEARN ================= */
+const LA = { t:0, playing:true, speed:1, all:false };
+function renderLearn(){
+  const L = lessonById(S.lessonId); fillLessonSelects();
+  $('#learnLevel').textContent = `${L.level} · ${L.steps.length} bước`;
+  $('#learnTitle').textContent = L.name; $('#learnDesc').textContent = L.desc;
+  const pr = progress[L.id];
+  $('#learnSteps').innerHTML = L.steps.map((s,i) => `<li><button data-i="${i}" class="${i===S.step?'on':''}">
+    <span class="n">${i+1}</span><span><b>${esc(s.name)}</b>${pr && (pr.steps[i]||0)>=PASS ? ' <span class="ok">Đã đạt</span>' : ''}</span><span class="h">${esc(s.han)}</span></button></li>`).join('');
+  const s = L.steps[S.step];
+  const targets = FEATS.map((f,i) => ({ f, v:s.feats[i], w: s.w[f.id] ?? 1 })).filter(x => x.v!=null && x.w>=1);
+  $('#stepDetail').innerHTML = `
+    <div class="sd-head"><span class="han-big">${esc(s.han)}</span><div><p class="eyebrow">Bước ${S.step+1} / ${L.steps.length}</p><h3>${esc(s.name)}</h3></div></div>
+    ${s.desc ? `<p class="muted">${esc(s.desc)}</p>` : ''}
+    ${s.cue.length ? `<div><b>Yếu lĩnh</b><ul class="cues">${s.cue.map(c=>`<li>${esc(c)}</li>`).join('')}</ul></div>` : ''}
+    <div><b>Góc khớp chuẩn của võ sư</b><p class="small muted" style="margin:2px 0 6px">Ứng dụng chấm điểm dựa trên các số đo này (sai số cho phép ±${FEATS[6].tol}° ở gối, ±${FEATS[0].tol}° ở khuỷu tay).</p>
+      <div class="targets">${targets.map(t => `<span>${esc(t.f.label)}</span><span>${fmtFeat(t.f,t.v)}</span>`).join('')}</div></div>`;
+  $('#learnToggle').textContent = LA.playing ? 'Tạm dừng' : 'Phát';
+  $('#learnAll').textContent = LA.all ? 'Xem từng bước' : 'Xem cả bài';
+}
+$('#learnSteps').addEventListener('click', e => { const b = e.target.closest('button[data-i]'); if(!b) return; S.step = +b.dataset.i; LA.t = 0; LA.all = false; renderLearn(); });
+$('#learnPrev').onclick = () => { S.step = Math.max(0, S.step-1); LA.t=0; LA.all=false; renderLearn(); };
+$('#learnNext').onclick = () => { S.step = Math.min(lessonById(S.lessonId).steps.length-1, S.step+1); LA.t=0; LA.all=false; renderLearn(); };
+$('#learnToggle').onclick = () => { LA.playing = !LA.playing; renderLearn(); };
+$('#learnAll').onclick = () => { LA.all = !LA.all; LA.t = 0; LA.playing = true; renderLearn(); };
+$('#learnSpeed').onchange = e => { LA.speed = +e.target.value; };
+$('#learnPractice').onclick = () => { S.mode='single'; go('practice'); };
+$('#learnPracticeFull').onclick = () => { S.mode='full'; go('practice'); };
+
+/* frame index for "play the movement into step i, then hold" */
+function stepAnimFrame(L, i, t){
+  const end = L.stepFrames[i], start = i>0 ? L.stepFrames[i-1] : Math.max(L.seqStart, end-12);
+  const dur = (end-start)/FPS, hold = 1.2;
+  const cyc = t % (dur + hold + 0.4);
+  if(cyc < 0.4) return start;
+  return Math.min(end, start + (cyc-0.4)*FPS);
+}
+function learnTick(dt){
+  const L = lessonById(S.lessonId);
+  if(LA.playing) LA.t += dt*LA.speed;
+  let f;
+  if(LA.all){
+    const span = (L.seqEnd - L.seqStart)/FPS + 1.5, cyc = LA.t % span;
+    f = Math.min(L.seqEnd, L.seqStart + cyc*FPS);
+    const si = stepAtFrame(L, f); if(si !== S.step){ S.step = si; renderLearn(); }
+  } else f = stepAnimFrame(L, S.step, LA.t);
+  if(!render3D($('#learnStage'), pose3DAt(L, f), { keys: keyJoints(L.steps[S.step]) }))
+    drawScene($('#learnCanvas'), poseAt(L, f), { ghostPose: LA.all ? null : L.steps[S.step].pose });
+}
+
+/* ================= PRACTICE ================= */
+const P = { camOn:false, state:'idle', score:0, hold:0, passed:false, lastDetect:0, lastUI:0, lastSpeak:0, lastMsg:'', saidHold:false,
+  refT:0, rec:[], lastRec:0, runStart:0, countEnd:0, guideStep:-1, nextT:null, liveMirror:false, lastVT:-1 };
+
+function renderPractice(){
+  const L = lessonById(S.lessonId); fillLessonSelects();
+  S.step = clamp(S.step, 0, L.steps.length-1);
+  $('#pracTitle').textContent = L.name;
+  document.querySelectorAll('#modeSeg button').forEach(b => b.classList.toggle('on', b.dataset.mode===S.mode));
+  const pr = progress[L.id];
+  $('#stepChips').innerHTML = L.steps.map((s,i) => `<button data-i="${i}" class="${i===S.step && S.mode==='single'?'on':''}">
+    <span class="dot ${pr && (pr.steps[i]||0)>=PASS ? 'good':''}"></span>${i+1}. ${esc(s.name)}</button>`).join('');
+  $('#stepChips').hidden = S.mode!=='single';
+  $('#fullActions').hidden = S.mode!=='full';
+  $('#holdBar').hidden = S.mode!=='single' || !P.camOn;
+  $('#stepPrev').parentElement.hidden = S.mode!=='single';
+  updateRefInfo(S.step);
+  $('#fullStart').disabled = P.state!=='idle';
+  $('#fullStop').disabled = P.state!=='running';
+  $('#optModel').value = S.model;
+}
+function updateRefInfo(i){
+  const L = lessonById(S.lessonId), s = L.steps[i];
+  $('#refHan').textContent = s.han; $('#refName').textContent = s.name;
+  $('#refIdx').textContent = `Bước ${i+1} / ${L.steps.length}`;
+  $('#refCues').innerHTML = s.cue.map(c => `<li>${esc(c)}</li>`).join('');
+}
+function setStep(i){
+  const L = lessonById(S.lessonId);
+  S.step = clamp(i, 0, L.steps.length-1);
+  Object.assign(P, { hold:0, passed:false, score:0, saidHold:false, lastMsg:'', refT:0 });
+  clearTimeout(P.nextT); $('#pSuccess').hidden = true;
+  renderPractice();
+  if(P.camOn) say(`Bước ${S.step+1}. ${L.steps[S.step].name}`);
+}
+$('#stepChips').addEventListener('click', e => { const b = e.target.closest('button[data-i]'); if(b) setStep(+b.dataset.i); });
+$('#stepPrev').onclick = () => setStep(S.step-1);
+$('#stepNext').onclick = () => setStep(S.step+1);
+$('#modeSeg').addEventListener('click', e => {
+  const b = e.target.closest('button[data-mode]'); if(!b) return;
+  if(P.state!=='idle') abortFull();
+  S.mode = b.dataset.mode; $('#results').hidden = true; setStep(S.step);
+});
+$('#optVoice').onchange = e => { S.voice = e.target.checked; if(!S.voice) try{ speechSynthesis.cancel(); }catch(_){} };
+$('#optGhost').onchange = e => { S.ghost = e.target.checked; };
+$('#optMirror').onchange = e => { S.allowMirror = e.target.checked; };
+$('#optAuto').onchange = e => { S.autoNext = e.target.checked; };
+$('#optModel').onchange = e => { S.model = e.target.value; ensureModel().then(() => toast('Đã đổi mô hình AI')).catch(()=>{}); };
+
+$('#camBtn').onclick = async () => {
+  $('#camErr').textContent = '';
+  try{
+    await startCamera($('#pvideo'));
+    P.camOn = true; $('#pEmpty').hidden = true; renderPractice();
+    await ensureModel();
+    say(S.mode==='single' ? `Bước ${S.step+1}. ${lessonById(S.lessonId).steps[S.step].name}` : 'Sẵn sàng. Bấm bắt đầu cả bài khi bạn đã vào vị trí.');
+  }catch(e){ if(!P.camOn) $('#camErr').textContent = camErrorText(e); }
+};
+
+function setBanner(id, msg){ const b = $(id); if(msg){ b.textContent = msg; b.hidden = false; } else b.hidden = true; }
+function setScoreUI(score, verdict, cls){
+  const arc = $('#ringArc'), C = 276.5;
+  arc.style.strokeDashoffset = C*(1 - clamp(score,0,100)/100);
+  arc.style.stroke = score>=PASS ? COL.good : score>=60 ? COL.warn : score>0 ? COL.bad : COL.gold;
+  $('#scoreNum').textContent = score>0 ? Math.round(score) : '–';
+  const v = $('#verdict'); v.textContent = verdict; v.className = 'pill ' + (cls||'');
+}
+function setFixes(errs, extra){
+  const el = $('#fixes');
+  if(extra){ el.innerHTML = `<li class="warn">${esc(extra)}</li>`; return; }
+  if(!errs.length){ el.innerHTML = `<li class="good">Tư thế khớp với mẫu. Giữ nguyên.</li>`; return; }
+  el.innerHTML = errs.slice(0,4).map(it => `<li class="${it.nd>1.6?'bad':'warn'}"><span>${esc(advice(it))}
+    <small>${esc(it.f.label)}: bạn ${fmtFeat(it.f,it.u)}, mẫu ${fmtFeat(it.f,it.r)}</small></span></li>`).join('');
+}
+function framingIssue(pose){
+  if(!pose) return 'Không thấy người. Hãy đứng vào giữa khung hình.';
+  if(!vis(pose,'la') && !vis(pose,'ra')) return 'Lùi ra xa để camera thấy cả bàn chân.';
+  if(!vis(pose,'nose')) return 'Camera chưa thấy đầu. Hạ máy thấp hơn hoặc lùi ra xa.';
+  return null;
+}
+function comparePose(pose, step){
+  const uf = features(pose);
+  const a = compareFeats(uf, step.feats, step.w);
+  if(!S.allowMirror) return { ...a, mirrored:false };
+  const b = compareFeats(uf, step.featsM, step.wM);
+  return b.score > a.score + 3 ? { ...b, mirrored:true } : { ...a, mirrored:false };
+}
+function sizeOverlay(cv, video){
+  if(cv.width !== video.videoWidth || cv.height !== video.videoHeight){ cv.width = video.videoWidth; cv.height = video.videoHeight; }
+  const ctx = cv.getContext('2d'); ctx.clearRect(0,0,cv.width,cv.height); return ctx;
+}
+function drawOnCamera(ctx, H, user, ref, colors, color){
+  const hip = mid(g(user,'lh'), g(user,'rh')), unit = torsoLen(user)*H;
+  if(ref && S.ghost) drawFigure(ctx, ref, { cx:hip[0]*H, hipY:hip[1]*H, unit, mirror:false, anchor:'hip', style:'ghost', color:'rgba(217,165,74,.75)' });
+  drawFigure(ctx, user, { cx:hip[0]*H, hipY:hip[1]*H, unit, mirror:false, anchor:'hip', style:'skeleton', colors, color });
+}
+
+function practiceTick(now, dt){
+  const L = lessonById(S.lessonId);
+  // reference panel
+  P.refT += dt;
+  if(S.mode==='single' || P.state==='idle' || P.state==='countdown'){
+    const i = S.mode==='single' ? S.step : 0, f = S.mode==='single' ? stepAnimFrame(L, i, P.refT) : L.stepFrames[0];
+    if(!render3D($('#refStage'), pose3DAt(L, f), { keys: keyJoints(L.steps[i]) })) drawScene($('#refCanvas'), poseAt(L, f));
+  }
+  if(P.state==='countdown'){
+    const left = Math.ceil((P.countEnd - now)/1000);
+    $('#pCount').hidden = false; $('#pCount').textContent = left>0 ? left : 'Bắt đầu';
+    if(now >= P.countEnd + 500){ $('#pCount').hidden = true; P.state='running'; P.runStart = now; P.rec = []; P.lastRec = 0; P.guideStep = -1; renderPractice(); }
+  }
+  if(!P.camOn) return;
+  const video = $('#pvideo');
+  if(video.readyState < 2 || !landmarker){ setBanner('#pBanner', landmarker ? 'Đang mở camera…' : 'Đang tải mô hình AI…'); return; }
+  if(video.currentTime === P.lastVT && P.state!=='running'){ return; }
+  P.lastVT = video.currentTime;
+  const pose = detectPose(video);
+  const H = video.videoHeight, ctx = sizeOverlay($('#pcanvas'), video);
+  const detDt = P.lastDetect ? Math.min(0.2, (now - P.lastDetect)/1000) : 0; P.lastDetect = now;
+
+  if(S.mode==='single') singleUpdate(L, pose, ctx, H, now, detDt);
+  else fullUpdate(L, pose, ctx, H, now);
+}
+
+function singleUpdate(L, pose, ctx, H, now, dt){
+  const step = L.steps[S.step], issue = framingIssue(pose);
+  if(!pose){ setBanner('#pBanner', issue); P.hold = Math.max(0, P.hold - dt*2); updateHold(); if(now-P.lastUI>250){ setScoreUI(0,'Không thấy người',''); setFixes([], issue); P.lastUI=now; } return; }
+  const r = comparePose(pose, step);
+  P.score = P.score*0.7 + r.score*0.3;
+  const errs = errorsOf(r.items), colors = {};
+  r.items.forEach(it => colors[it.f.id] = ndColor(it.nd));
+  drawOnCamera(ctx, H, pose, r.mirrored ? step.poseM : step.pose, colors);
+  setBanner('#pBanner', issue || (r.coverage < 0.6 ? 'Camera chưa thấy đủ các khớp quan trọng.' : null));
+
+  const passing = !issue && r.coverage >= 0.6 && P.score >= PASS && !errs.some(e => e.wt>=1 && e.nd>1.5);
+  if(!P.passed){
+    P.hold = passing ? P.hold + dt : Math.max(0, P.hold - dt*1.5);
+    if(P.hold >= HOLD_SEC){
+      P.passed = true; saveProgress(L.id, { step:S.step, score:P.score });
+      $('#pSuccess').hidden = false; gong(); say('Đạt. Rất tốt.');
+      P.nextT = setTimeout(() => {
+        $('#pSuccess').hidden = true;
+        if(S.autoNext && S.step < L.steps.length-1) setStep(S.step+1);
+        else { renderPractice(); if(S.step===L.steps.length-1) say('Bạn đã hoàn thành tất cả các bước. Thử chế độ cả bài nhé.'); }
+      }, 1800);
+    }
+  }
+  updateHold();
+  if(now - P.lastUI > 120){
+    P.lastUI = now;
+    const verdict = P.passed ? 'Đạt' : passing ? 'Giữ nguyên…' : P.score >= 60 ? 'Gần đúng' : 'Chưa khớp';
+    setScoreUI(P.score, verdict + (r.mirrored ? ' · đối xứng' : ''), P.passed||passing ? 'good' : P.score>=60 ? 'warn' : 'bad');
+    setFixes(errs, issue);
+  }
+  if(!P.passed && !issue && now - P.lastSpeak > 3500){
+    if(errs.length){ const msg = advice(errs[0]); if(msg !== P.lastMsg || now - P.lastSpeak > 8000){ say(msg); P.lastMsg = msg; P.lastSpeak = now; } }
+    else if(passing && !P.saidHold){ say('Tốt, giữ nguyên'); P.saidHold = true; P.lastSpeak = now; }
+  }
+}
+function updateHold(){
+  const pct = P.passed ? 100 : 100*P.hold/HOLD_SEC;
+  $('#holdBar i').style.width = pct + '%';
+  $('#holdBar span').textContent = P.passed ? 'Đã đạt' : pct>0 ? `Giữ tư thế ${(HOLD_SEC - P.hold).toFixed(1)} s` : 'Vào đúng tư thế để bắt đầu giữ';
+}
+
+/* ---- full routine ---- */
+function tempo(){ return +$('#tempo').value; }
+$('#fullStart').onclick = async () => {
+  if(!P.camOn){ $('#camBtn').click(); toast('Bật camera trước, rồi bấm bắt đầu.'); return; }
+  try{ await ensureModel(); }catch(e){ return; }
+  $('#results').hidden = true; P.state = 'countdown'; P.countEnd = performance.now() + 3000;
+  say('Chuẩn bị. Bài bắt đầu sau ba giây'); renderPractice();
+};
+$('#fullStop').onclick = () => finishFull();
+function abortFull(){ P.state='idle'; $('#pCount').hidden = true; $('#guideTag').hidden = true; renderPractice(); }
+
+function fullUpdate(L, pose, ctx, H, now){
+  const issue = framingIssue(pose);
+  if(P.state==='running'){
+    const t = (now - P.runStart)/1000 * tempo();
+    const f = L.seqStart + t*FPS;
+    const guide = poseAt(L, Math.min(f, L.seqEnd));
+    if(!render3D($('#refStage'), pose3DAt(L, Math.min(f, L.seqEnd)))) drawScene($('#refCanvas'), guide);
+    const si = stepAtFrame(L, Math.min(f, L.seqEnd));
+    if(si !== P.guideStep){ P.guideStep = si; updateRefInfo(si); say(L.steps[si].name); }
+    $('#guideTag').hidden = false; $('#guideTag').textContent = `Thức ${si+1}/${L.steps.length} · ${L.steps[si].name}`;
+    if(now - P.lastRec >= 100){ P.rec.push(pose ? pose.map(q => q.slice()) : null); P.lastRec = now; }
+    if(pose){
+      const r = compareFeats(features(pose), features(guide), L.steps[si].w);
+      const colors = {}; r.items.forEach(it => colors[it.f.id] = ndColor(it.nd));
+      drawOnCamera(ctx, H, pose, guide, colors);
+      if(now - P.lastUI > 150){ P.lastUI = now; setScoreUI(r.score, 'Đang ghi bài', 'warn'); setFixes([], 'Đang ghi. Tập theo nhịp mẫu, kết quả chi tiết hiện sau khi xong.'); }
+    }
+    setBanner('#pBanner', issue);
+    if(f > L.seqEnd + 3*FPS*tempo()) finishFull();
+  } else {
+    if(pose) drawOnCamera(ctx, H, pose, null, null, COL.gold);
+    setBanner('#pBanner', issue || (P.state==='idle' ? 'Vào vị trí rồi bấm “Bắt đầu cả bài”.' : null));
+    if(P.state==='idle' && now - P.lastUI > 300){ P.lastUI = now; setScoreUI(0, 'Chờ bắt đầu', ''); setFixes([], 'Chế độ cả bài: tập liền mạch theo hình mẫu bên trái. Ứng dụng tự căn nhịp (DTW) nên tập chậm hơn mẫu vẫn được chấm đúng.'); }
+  }
+}
+
+function finishFull(){
+  if(P.state!=='running') return;
+  P.state = 'analyzing'; $('#guideTag').hidden = true; setBanner('#pBanner', null);
+  const L = lessonById(S.lessonId);
+  const res = analyzeRun(L, P.rec, S.allowMirror);
+  P.state = 'idle'; renderPractice(); updateRefInfo(0);
+  if(res.error){ toast(res.error); say(res.error); return; }
+  saveProgress(L.id, { full:res.overall });
+  res.steps.forEach(s => { if(s.score >= PASS) saveProgress(L.id, { step:s.idx, score:s.score }); });
+  renderResults(L, res); gong();
+  say(`Hoàn thành. Bạn đạt ${Math.round(res.overall)} điểm.`);
+}
+
+/* ---- DTW alignment: user sequence vs reference sequence ---- */
+function frameCost(uf, rf, w){ const r = compareFeats(uf, rf, w, false); return r.coverage < 0.3 ? 1 : 1 - r.score/100; }
+function dtw(uF, rF, rW){
+  const n = rF.length, m = uF.length, cost = new Float32Array(n*m), D = new Float32Array(n*m);
+  for(let i=0;i<n;i++) for(let j=0;j<m;j++) cost[i*m+j] = frameCost(uF[j], rF[i], rW[i]);
+  for(let i=0;i<n;i++) for(let j=0;j<m;j++){
+    const c = cost[i*m+j];
+    if(i===0){ D[j] = c; continue; }               // open begin: reference may start at any user frame
+    let b = D[(i-1)*m+j];
+    if(j>0) b = Math.min(b, D[(i-1)*m+j-1], D[i*m+j-1]);
+    D[i*m+j] = c + b;
+  }
+  let jEnd = 0; for(let j=1;j<m;j++) if(D[(n-1)*m+j] < D[(n-1)*m+jEnd]) jEnd = j;  // open end
+  const path = [[n-1, jEnd]]; let i = n-1, j = jEnd;
+  while(i > 0){
+    let best = [i-1, j];
+    if(j > 0) for(const o of [[i-1,j-1],[i,j-1]]) if(D[o[0]*m+o[1]] < D[best[0]*m+best[1]]) best = o;
+    [i, j] = best; path.push([i, j]);
+  }
+  path.reverse();
+  return { cost, m, path, avg: D[(n-1)*m+jEnd]/path.length };
+}
+function analyzeRun(L, rec, allowMirror){
+  const valid = rec.map((p,j) => ({ p, j })).filter(o => o.p);
+  if(valid.length < 10) return { error:'Không đủ dữ liệu để chấm: camera không thấy bạn trong phần lớn thời gian tập.' };
+  const uF = valid.map(o => features(o.p));
+  const idx = []; for(let i=L.seqStart;i<=L.seqEnd;i++) idx.push(i);
+  const nearest = i => L.steps[stepAtFrame(L, i)];
+  const variants = [{ mir:false, rF: idx.map(i => L.feats[i]), rW: idx.map(i => nearest(i).w) }];
+  if(allowMirror) variants.push({ mir:true, rF: idx.map(i => features(mirrorPose(L.frames[i]))), rW: idx.map(i => nearest(i).wM) });
+  let best = null;
+  for(const v of variants){ const d = dtw(uF, v.rF, v.rW); if(!best || d.avg < best.avg) best = { ...d, ...v }; }
+
+  const steps = L.steps.map((st, si) => {
+    const k = st.frame - L.seqStart, cand = new Set();
+    best.path.forEach(([i,j]) => { if(Math.abs(i-k) <= 4) cand.add(j); });
+    let top = null;
+    cand.forEach(j => {
+      const r = compareFeats(uF[j], best.mir ? st.featsM : st.feats, best.mir ? st.wM : st.w);
+      if(!top || r.score > top.score) top = { score:r.score, items:r.items, user:valid[j].p };
+    });
+    return { idx:si, step:st, ref: best.mir ? st.poseM : st.pose, ...(top || { score:0, items:[], user:null }) };
+  });
+  const timeline = new Array(idx.length).fill(0);
+  best.path.forEach(([i,j]) => { timeline[i] = Math.max(timeline[i], 100*(1 - best.cost[i*best.m+j])); });
+  // pace: user time between first and last step keyframes vs reference time between them
+  const userAt = k => { const js = best.path.filter(([i]) => i===k).map(p => p[1]); return js.length ? valid[js[Math.floor(js.length/2)]].j : null; };
+  const k0 = L.steps[0].frame - L.seqStart, k1 = L.steps[L.steps.length-1].frame - L.seqStart;
+  const u0 = userAt(k0), u1 = userAt(k1);
+  const refSec = Math.max(0.1, (k1-k0)/FPS), userSec = u0!=null && u1!=null && u1>u0 ? (u1-u0)/10 : refSec;
+  const overall = steps.reduce((a,s) => a + s.score, 0)/steps.length;
+  return { overall, steps, timeline, mirrored: best.mir, userSec, refSec };
+}
+
+function rankOf(s){ return s>=90 ? 'Cao thủ' : s>=80 ? 'Đệ tử chân truyền' : s>=65 ? 'Môn sinh' : 'Nhập môn'; }
+function renderResults(L, res){
+  const el = $('#results'); el.hidden = false;
+  const ratio = res.userSec/res.refSec;
+  const pace = ratio > 1.25 ? `Bạn tập chậm hơn nhịp chuẩn khoảng ${Math.round((ratio-1)*100)}%.` : ratio < 0.8 ? `Bạn tập nhanh hơn nhịp chuẩn khoảng ${Math.round((1-ratio)*100)}%.` : 'Nhịp tập gần với nhịp chuẩn.';
+  const weakest = [...res.steps].sort((a,b) => a.score-b.score)[0];
+  el.innerHTML = `
+    <div class="card res-head">
+      <div class="res-score">${Math.round(res.overall)}<small>/100</small></div>
+      <div style="display:flex;flex-direction:column;gap:6px;flex:1;min-width:240px">
+        <p class="eyebrow">Kết quả cả bài · ${esc(L.name)}</p>
+        <h3>${rankOf(res.overall)}</h3>
+        <p class="muted">${pace} ${res.mirrored ? 'Bạn tập theo chiều đối xứng với mẫu, ứng dụng đã chấm theo chiều đó.' : ''} Thức cần luyện thêm nhất: <b style="color:var(--paper)">${esc(weakest.step.name)}</b>.</p>
+      </div>
+      <div class="row"><button class="btn primary" id="resAgain">Tập lại cả bài</button><button class="btn ghost" data-retry="${weakest.idx}">Luyện riêng thức yếu nhất</button></div>
+    </div>
+    <div class="card">
+      <div class="row" style="justify-content:space-between;margin-bottom:8px"><b>Độ khớp theo thời gian</b>
+        <div class="legend"><span><i style="background:${COL.good}"></i>≥ 80</span><span><i style="background:${COL.warn}"></i>60–79</span><span><i style="background:${COL.bad}"></i>&lt; 60</span></div></div>
+      <canvas id="timeline"></canvas>
+    </div>
+    <div class="res-steps">${res.steps.map(s => {
+      const errs = errorsOf(s.items);
+      const cls = s.score>=PASS ? 'good' : s.score>=60 ? 'warn' : 'bad';
+      return `<div class="res-step"><div class="t"><b>${s.idx+1}. ${esc(s.step.name)}</b><span class="pill ${cls}">${Math.round(s.score)}</span></div>
+        <canvas data-mini="${s.idx}"></canvas>
+        ${s.user ? (errs.length ? `<ul>${errs.slice(0,2).map(e => `<li>${esc(advice(e))}</li>`).join('')}</ul>` : `<p class="small" style="color:var(--good)">Khớp với mẫu.</p>`) : `<p class="small muted">Không bắt được tư thế ở thức này.</p>`}
+        <button class="btn small ghost" data-retry="${s.idx}">Luyện lại thức này</button></div>`;
+    }).join('')}</div>`;
+  // timeline
+  const c = fitCanvas($('#timeline'));
+  if(c){
+    const { ctx, w, h } = c, n = res.timeline.length, bw = w/n;
+    res.timeline.forEach((v,i) => { ctx.fillStyle = v>=80 ? COL.good : v>=60 ? COL.warn : COL.bad; const bh = Math.max(3, (h-18)*v/100); ctx.fillRect(i*bw, h-16-bh, Math.max(1,bw-0.5), bh); });
+    ctx.fillStyle = '#b5a688'; ctx.font = '600 11px "Be Vietnam Pro", sans-serif'; ctx.textAlign='center';
+    L.steps.forEach((s,i) => { const x = (s.frame - L.seqStart + 0.5)*bw; ctx.fillRect(x-0.5, 0, 1, h-16); ctx.fillText(String(i+1), clamp(x, 6, w-6), h-3); });
+  }
+  // mini comparisons: gold outline = master, coloured skeleton = student
+  el.querySelectorAll('canvas[data-mini]').forEach(cv => {
+    const s = res.steps[+cv.dataset.mini]; const c2 = fitCanvas(cv); if(!c2) return;
+    const { ctx, w, h } = c2, unit = h/4.3, hipY = h*0.5;
+    drawFigure(ctx, s.ref, { cx:w/2, unit, mirror:true, anchor:'hip', hipY, style:'ghost', color:'rgba(217,165,74,.85)' });
+    if(s.user){ const colors = {}; s.items.forEach(it => colors[it.f.id] = ndColor(it.nd));
+      drawFigure(ctx, s.user, { cx:w/2, unit, mirror:true, anchor:'hip', hipY, style:'skeleton', colors }); }
+  });
+  $('#resAgain').onclick = () => { el.hidden = true; $('#fullStart').click(); };
+  el.querySelectorAll('[data-retry]').forEach(b => b.onclick = () => { S.mode='single'; el.hidden = true; setStep(+b.dataset.retry); window.scrollTo({ top:0, behavior:'smooth' }); });
+  el.scrollIntoView({ behavior:'smooth', block:'start' });
+}
+
+/* ================= STUDIO ================= */
+const ST = { camOn:false, src:null, recording:false, countEnd:0, frames:[], world:[], lastRec:0, lastVT:-1, steps:[], scrub:0, playing:false, playT:0, editId:null, dirty:true };
+function renderStudio(){
+  $('#customList').innerHTML = customDefs.length ? customDefs.map(d => `<div class="card">
+      <p class="eyebrow">${esc(d.level)} · ${d.steps.length} bước · ${(d.frames.length/FPS).toFixed(1)} s</p><h3>${esc(d.name)}</h3>
+      <p class="muted small">${esc(d.desc||'')}</p>
+      <div class="row"><button class="btn small" data-c="learn" data-id="${esc(d.id)}">Học</button><button class="btn small ghost" data-c="edit" data-id="${esc(d.id)}">Mở để sửa</button>
+      <button class="btn small ghost" data-c="del" data-id="${esc(d.id)}">Xoá</button></div></div>`).join('')
+    : '<p class="muted">Chưa có bài nào. Ghi hình hoặc tải video lên để tạo bài đầu tiên.</p>';
+  renderEdSteps(); ST.dirty = true;
+}
+$('#customList').addEventListener('click', e => {
+  const b = e.target.closest('[data-c]'); if(!b) return; const id = b.dataset.id, d = customDefs.find(x => x.id===id); if(!d) return;
+  if(b.dataset.c==='learn'){ S.lessonId = id; S.step = 0; go('learn'); }
+  if(b.dataset.c==='edit'){ loadIntoEditor(d); toast('Đã mở bài để sửa'); }
+  if(b.dataset.c==='del'){
+    if(b.dataset.confirm){ customDefs = customDefs.filter(x => x.id!==id); store.set('kj_custom', customDefs); delete progress[id]; store.set('kj_progress', progress);
+      rebuildLessons(); if(!lessons.find(l => l.id===S.lessonId)) S.lessonId = lessons[0].id; renderStudio(); toast('Đã xoá bài'); }
+    else { b.dataset.confirm = '1'; b.textContent = 'Bấm lần nữa để xoá'; }
+  }
+});
+function loadIntoEditor(d){
+  ST.editId = d.id; ST.frames = d.frames.map(dec); ST.world = Array.isArray(d.world) ? d.world.map(dec) : []; ST.steps = d.steps.map(s => ({ ...s }));
+  $('#sName').value = d.name; $('#sLevel').value = d.level; $('#sDesc').value = d.desc || '';
+  setScrubMax(); renderEdSteps();
+}
+$('#sCam').onclick = async () => {
+  try{
+    const v = $('#svideo'); await startCamera(v); $('#sBox').classList.add('mirror');
+    ST.camOn = true; ST.src = 'cam'; $('#sRec').disabled = false; await ensureModel();
+  }catch(e){ toast(camErrorText(e)); }
+};
+$('#sRec').onclick = () => {
+  if(ST.recording){ stopRecording(); return; }
+  if(!ST.camOn) return;
+  ST.countEnd = performance.now() + 3000; ST.recording = 'countdown'; $('#sRec').textContent = 'Dừng ghi';
+};
+function stopRecording(){
+  ST.recording = false; $('#sRec').textContent = 'Ghi hình (đếm 3 giây)'; $('#sCount').hidden = true;
+  finishCapture();
+}
+$('#sFile').onchange = async e => {
+  const file = e.target.files[0]; e.target.value = ''; if(!file) return;
+  try{ await ensureModel(); }catch(_){ return; }
+  if(stream){ stream.getTracks().forEach(t => t.stop()); stream = null; ST.camOn = false; $('#sRec').disabled = true; }
+  const v = $('#svideo'); v.srcObject = null; v.src = URL.createObjectURL(file); $('#sBox').classList.remove('mirror');
+  ST.src = 'video'; ST.frames = []; ST.world = []; ST.steps = []; ST.editId = null; ST.lastVT = -1; resetFilters();
+  v.onended = () => { ST.src = null; finishCapture(); };
+  try{ await v.play(); setBanner('#sBanner', 'Đang phân tích video…'); }catch(err){ toast('Không phát được video này.'); }
+};
+function finishCapture(){
+  setBanner('#sBanner', null);
+  const firstOk = ST.frames.findIndex(Boolean);
+  if(firstOk < 0){ $('#sInfo').textContent = 'Không tìm thấy người trong đoạn vừa ghi. Hãy đứng xa hơn để thấy cả người.'; return; }
+  let last = ST.frames[firstOk]; ST.frames = ST.frames.map(p => (p ? (last = p) : last));
+  let lw = ST.world.find(Boolean) || null; ST.world = ST.world.map(w => (w ? (lw = w) : lw));
+  ST.steps = []; ST.editId = null; setScrubMax(); renderEdSteps();
+  $('#sInfo').textContent = `Đã ghi ${ST.frames.length} khung hình (${(ST.frames.length/FPS).toFixed(1)} giây). Kéo thanh bên phải để đánh dấu từng bước, hoặc bấm “Gợi ý bước tự động”.`;
+  toast('Đã tách xong khung xương');
+}
+function setScrubMax(){ const s = $('#edScrub'); s.max = Math.max(0, ST.frames.length-1); s.value = 0; ST.scrub = 0; ST.dirty = true; }
+$('#edScrub').oninput = e => { ST.scrub = +e.target.value; ST.playing = false; $('#edPlay').textContent = 'Phát'; ST.dirty = true; };
+$('#edPlay').onclick = () => { if(!ST.frames.length) return; ST.playing = !ST.playing; $('#edPlay').textContent = ST.playing ? 'Dừng' : 'Phát'; };
+$('#edTimeline').addEventListener('click', e => {
+  if(!ST.frames.length) return; const r = e.currentTarget.getBoundingClientRect();
+  ST.scrub = Math.round((e.clientX - r.left)/r.width*(ST.frames.length-1)); $('#edScrub').value = ST.scrub; ST.dirty = true;
+});
+$('#edAdd').onclick = () => {
+  if(!ST.frames.length){ toast('Chưa có dữ liệu. Hãy ghi hình hoặc tải video trước.'); return; }
+  const name = $('#edStepName').value.trim() || `Thức ${ST.steps.length+1}`;
+  ST.steps.push({ name, cue: $('#edStepCue').value.trim(), frame: ST.scrub });
+  ST.steps.sort((a,b) => a.frame-b.frame);
+  $('#edStepName').value = ''; $('#edStepCue').value = ''; renderEdSteps();
+};
+function renderEdSteps(){
+  $('#edSteps').innerHTML = ST.steps.map((s,i) => `<li><b style="color:var(--gold);font-family:var(--f-display);font-size:18px">${i+1}</b>
+    <div class="grow"><input type="text" data-name="${i}" value="${esc(s.name)}" aria-label="Tên bước ${i+1}"><small>Khung ${s.frame} · ${(s.frame/FPS).toFixed(1)} s${s.cue ? ' · ' + esc(s.cue) : ''}</small></div>
+    <button class="btn small ghost" data-jump="${i}">Xem</button><button class="btn small ghost" data-rm="${i}">Bỏ</button></li>`).join('')
+    || '<li class="muted">Chưa có bước nào.</li>';
+  ST.dirty = true;
+}
+$('#edSteps').addEventListener('click', e => {
+  const j = e.target.closest('[data-jump]'), r = e.target.closest('[data-rm]');
+  if(j){ ST.scrub = ST.steps[+j.dataset.jump].frame; $('#edScrub').value = ST.scrub; ST.dirty = true; }
+  if(r){ ST.steps.splice(+r.dataset.rm, 1); renderEdSteps(); }
+});
+$('#edSteps').addEventListener('input', e => { const i = e.target.dataset.name; if(i!=null) ST.steps[+i].name = e.target.value; });
+$('#edSuggest').onclick = () => {
+  if(ST.frames.length < 10){ toast('Cần ít nhất 1 giây dữ liệu.'); return; }
+  const F = ST.frames.map(features), n = F.length, motion = new Array(n).fill(0);
+  for(let i=1;i<n;i++){ let s=0, c=0; FEATS.forEach((f,k) => { if(F[i][k]!=null && F[i-1][k]!=null){ s += Math.abs(F[i][k]-F[i-1][k])/f.tol; c++; } }); motion[i] = c ? s/c : 1; }
+  const sm = motion.map((_,i) => { let s=0,c=0; for(let k=i-2;k<=i+2;k++) if(k>=0&&k<n){ s+=motion[k]; c++; } return s/c; });
+  const runs = []; let st = -1;
+  for(let i=0;i<=n;i++){ const still = i<n && sm[i] < 0.12; if(still && st<0) st = i; if(!still && st>=0){ if(i-st >= 5) runs.push([st, i-1]); st = -1; } }
+  const keys = []; runs.forEach(([a,b]) => { const m = Math.round((a+b)/2); if(!keys.length || m - keys[keys.length-1] >= 8) keys.push(m); });
+  if(!keys.length){ toast('Không tìm thấy đoạn dừng rõ ràng. Hãy đánh dấu thủ công.'); return; }
+  ST.steps = keys.map((f,i) => ({ name:`Thức ${i+1}`, cue:'', frame:f })); renderEdSteps();
+  toast(`Đã gợi ý ${keys.length} bước tại các điểm võ sư dừng thế. Đặt lại tên cho từng bước.`);
+};
+function currentDef(){
+  const name = $('#sName').value.trim();
+  return { id: ST.editId || ('c-' + Date.now()), custom:true, han:'自創', name, level: $('#sLevel').value, desc: $('#sDesc').value.trim(),
+    frames: ST.frames.map(enc), world: ST.world.map(w => w ? w.flatMap(q => q.map(v => +v.toFixed(3))) : null), steps: ST.steps.map(s => ({ name:s.name, cue:s.cue, frame:s.frame })) };
+}
+$('#edSave').onclick = () => {
+  if(!ST.frames.length){ toast('Chưa có dữ liệu để lưu.'); return; }
+  if(!$('#sName').value.trim()){ toast('Hãy đặt tên bài.'); $('#sName').focus(); return; }
+  if(!ST.steps.length){ toast('Đánh dấu ít nhất một bước.'); return; }
+  const d = currentDef(); const i = customDefs.findIndex(x => x.id===d.id);
+  if(i>=0) customDefs[i] = d; else customDefs.push(d);
+  ST.editId = d.id;
+  if(!store.set('kj_custom', customDefs)) toast('Bộ nhớ trình duyệt đầy. Hãy xuất file JSON để giữ bài.');
+  else toast('Đã lưu bài. Học viên có thể học ngay ở mục Hành trình.');
+  rebuildLessons(); renderStudio();
+};
+$('#edExport').onclick = () => {
+  if(!ST.frames.length){ toast('Chưa có dữ liệu để xuất.'); return; }
+  const d = currentDef(); d.name = d.name || 'bai-quyen';
+  const blob = new Blob([JSON.stringify(d)], { type:'application/json' }), a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = d.name.replace(/[^\p{L}\p{N}]+/gu, '-') + '.json'; a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+};
+$('#edImport').onchange = async e => {
+  const file = e.target.files[0]; e.target.value = ''; if(!file) return;
+  try{
+    const d = JSON.parse(await file.text());
+    if(!Array.isArray(d.frames) || !Array.isArray(d.steps) || !d.steps.length) throw new Error('thiếu frames/steps');
+    d.custom = true; d.id = customDefs.some(x => x.id===d.id) || !d.id ? 'c-' + Date.now() : d.id;
+    buildLesson(d); customDefs.push(d); store.set('kj_custom', customDefs); rebuildLessons(); renderStudio();
+    toast(`Đã nhập bài “${d.name}”`);
+  }catch(err){ toast('File không đúng định dạng bài Kungfu Journey.'); }
+};
+
+function studioPose3D(i){
+  const w = ST.world[i]; if(w) return w.map(q => [q[0], -q[1], -q[2]]);
+  const p = ST.frames[i]; if(p) return to3D(p);
+  const L = lessonById('tan-phap'); return L.world3[L.stepFrames[0]];
+}
+function studioTick(now, dt){
+  const v = $('#svideo');
+  if(ST.recording==='countdown'){
+    const left = Math.ceil((ST.countEnd - now)/1000);
+    $('#sCount').hidden = false; $('#sCount').textContent = left>0 ? left : 'Ghi';
+    if(now >= ST.countEnd + 300){ $('#sCount').hidden = true; ST.recording = true; ST.frames = []; ST.world = []; ST.lastRec = 0; }
+  }
+  if((ST.src==='cam' && ST.camOn) || (ST.src==='video' && !v.paused)){
+    if(v.readyState >= 2 && landmarker && v.currentTime !== ST.lastVT){
+      const vt = v.currentTime;
+      const pose = detectPose(v), ctx = sizeOverlay($('#scanvas'), v);
+      if(pose) drawFigure(ctx, pose, { cx: mid(g(pose,'lh'),g(pose,'rh'))[0]*v.videoHeight, hipY: mid(g(pose,'lh'),g(pose,'rh'))[1]*v.videoHeight,
+        unit: torsoLen(pose)*v.videoHeight, mirror:false, anchor:'hip', style:'skeleton', color: ST.recording===true || ST.src==='video' ? COL.cin : COL.gold });
+      if(ST.src==='video'){
+        if(ST.lastVT < 0 || vt - ST.lastVT >= 0.1){ ST.frames.push(pose ? pose.map(q => q.slice()) : null); ST.world.push(pose && lastWorld ? lastWorld.map(q => q.slice()) : null); ST.lastVT = vt;
+          $('#sInfo').textContent = `Đang phân tích: ${vt.toFixed(1)} / ${(v.duration||0).toFixed(1)} giây`; }
+      } else {
+        ST.lastVT = vt;
+        if(ST.recording===true && now - ST.lastRec >= 100){ ST.frames.push(pose ? pose.map(q => q.slice()) : null); ST.world.push(pose && lastWorld ? lastWorld.map(q => q.slice()) : null); ST.lastRec = now;
+          $('#sInfo').textContent = `Đang ghi: ${(ST.frames.length/FPS).toFixed(1)} giây. Bấm Dừng ghi khi xong.`; }
+      }
+    }
+  }
+  if(ST.playing && ST.frames.length){
+    ST.playT += dt*FPS; if(ST.playT >= 1){ ST.scrub = (ST.scrub + Math.floor(ST.playT)) % ST.frames.length; ST.playT %= 1; $('#edScrub').value = ST.scrub; ST.dirty = true; }
+  }
+  const has3d = V3.ok && render3D($('#edStage'), studioPose3D(ST.scrub));
+  if(ST.dirty){
+    ST.dirty = false;
+    const p = ST.frames[ST.scrub];
+    if(has3d){} else if(p) drawScene($('#edCanvas'), p); else { const c = fitCanvas($('#edCanvas')); if(c){ c.ctx.fillStyle='#b5a688'; c.ctx.font='14px "Be Vietnam Pro",sans-serif'; c.ctx.textAlign='center'; c.ctx.fillText('Hình mẫu sẽ hiện ở đây sau khi ghi', c.w/2, c.h/2); } }
+    $('#edTime').textContent = `${(ST.scrub/FPS).toFixed(1)} s · khung ${ST.scrub}`;
+    const c = fitCanvas($('#edTimeline'));
+    if(c){ const { ctx, w, h } = c; ctx.fillStyle = '#2a221c'; ctx.fillRect(0, h/2-3, w, 6);
+      const n = Math.max(1, ST.frames.length-1);
+      ST.steps.forEach((s,i) => { const x = s.frame/n*w; ctx.fillStyle = COL.cin; ctx.beginPath(); ctx.arc(clamp(x,7,w-7), h/2, 7, 0, 7); ctx.fill();
+        ctx.fillStyle = '#fff8ec'; ctx.font = '700 10px "Be Vietnam Pro",sans-serif'; ctx.textAlign = 'center'; ctx.fillText(String(i+1), clamp(x,7,w-7), h/2+3.5); });
+      ctx.fillStyle = COL.gold; ctx.fillRect(clamp(ST.scrub/n*w, 1, w-2) - 1, 0, 2, h); }
+  }
+}
+
+/* ================= Main loop ================= */
+let lastNow = performance.now();
+function loop(now){
+  requestAnimationFrame(loop);
+  const dt = Math.min(0.1, (now - lastNow)/1000); lastNow = now;
+  try{
+    if(S.view==='home'){
+      HERO.L = HERO.L || lessonById('ngu-thuc'); HERO.t += dt;
+      const L = HERO.L, span = (L.seqEnd - L.seqStart)/FPS + 1;
+      const hf = Math.min(L.seqEnd, (HERO.t % span)*FPS);
+      if(!render3D($('#heroStage'), pose3DAt(L, hf), { autoRotate:true })) drawScene($('#heroCanvas'), poseAt(L, hf));
+    }
+    if(S.view==='learn') learnTick(dt);
+    if(S.view==='practice') practiceTick(now, dt);
+    if(S.view==='studio') studioTick(now, dt);
+  }catch(e){ console.error(e); }
+}
+window.addEventListener('resize', () => { ST.dirty = true; });
+showView(location.hash.slice(1) || 'home');
+requestAnimationFrame(loop);
+init3D();
+
+/* expose pure helpers for testing in the console */
+window.KJ = { V3, applyPose3D: p => applyPose3D(p), camPreset, features, compareFeats, dtw, analyzeRun, buildLesson, BUILTIN, lessons: () => lessons, mirrorPose };
+</script>
+</body>
+</html>
