@@ -266,3 +266,26 @@ textarea{resize:vertical;min-height:64px}
 .rec-btn.on{background:var(--cinnabar);border-color:var(--cinnabar);color:#fff8ec}
 .studio-note{margin:-6px 0 16px;color:var(--paper-dim);font-size:14px}
 .studio-note a{color:var(--gold)}
+
+/* body zone + far view */
+.zone-tag{position:absolute;left:14px;top:56px;background:rgba(21,17,15,.86);border:1px solid var(--line);color:var(--paper);padding:5px 11px;border-radius:999px;font-size:13px;font-weight:600}
+.zone-tag.warn{border-color:var(--warn);color:var(--warn)}
+.far-btn{position:absolute;right:14px;top:14px;z-index:4;background:rgba(21,17,15,.8);border:1px solid var(--line);color:var(--paper);padding:6px 11px;border-radius:10px;font:inherit;font-size:13px;cursor:pointer}
+.far-btn:hover{border-color:var(--gold)}
+.far-hud{display:none}
+.stage.far{position:fixed;inset:0;z-index:80;height:100vh!important;border-radius:0;border:0}
+.stage.far .far-hud{display:flex;position:absolute;left:0;right:0;bottom:0;align-items:center;gap:3vw;padding:2vh 4vw;background:linear-gradient(transparent,rgba(13,10,9,.92) 40%);z-index:3}
+.far-hud b{font-family:var(--f-display);font-size:min(18vh,150px);line-height:1;min-width:2.2ch;text-align:center;font-variant-numeric:tabular-nums lining-nums}
+.far-hud b.good{color:var(--good)} .far-hud b.warn{color:var(--warn)} .far-hud b.bad{color:var(--bad)}
+.far-hud span{font-size:min(6vh,48px);font-weight:700;line-height:1.15}
+.stage.far .banner{font-size:min(4vh,30px);top:3vh;padding:1vh 2vw}
+.stage.far .guide-tag,.stage.far .coach-tag,.stage.far .zone-tag{font-size:min(3vh,22px)}
+.stage.far .holdbar{bottom:22vh}
+.stage.far .holdbar span{font-size:min(3vh,22px)}
+.stage.far .rec-btn{display:none}
+.opt-row{display:flex;flex-direction:column;gap:4px;margin-top:6px}
+.opt-row select{width:100%}
+.opt-row span{display:flex;align-items:center;gap:8px}
+.opt-row input[type=range]{flex:1}
+.in-room .far-btn{display:none}
+.stage.far .banner{display:none!important}

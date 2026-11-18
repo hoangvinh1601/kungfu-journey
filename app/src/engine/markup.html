@@ -74,13 +74,16 @@
         <div class="mirror-box mirror"><video id="pvideo" playsinline muted></video><canvas id="pcanvas"></canvas></div>
         <div class="stage-empty" id="pEmpty">
           <span class="han-big">練</span>
-          <p>Đặt máy cách 2 đến 3 mét, quay chính diện, sao cho camera thấy cả người từ đầu đến bàn chân.</p>
+          <p>Đặt máy cách 2 đến 3 mét để thấy cả người. Phòng hẹp thì đứng gần cũng được: ứng dụng tự chấm phần thân camera thấy (thân trên hoặc thân dưới).</p>
           <button class="btn primary" id="camBtn">Bật camera</button>
           <small id="camErr"></small>
         </div>
         <div class="banner" id="pBanner" hidden></div>
         <div class="guide-tag" id="guideTag" hidden></div>
         <div class="coach-tag" id="coachTag" hidden></div>
+        <div class="zone-tag" id="zoneTag" hidden></div>
+        <button class="far-btn" id="farBtn" type="button">⛶ Xem từ xa</button>
+        <div class="far-hud" id="farHud"><b id="farScore">–</b><span id="farTip"></span></div>
         <button class="rec-btn" id="recBtn" type="button" hidden>● Quay video</button>
         <div class="holdbar" id="holdBar" hidden><i></i><span>Giữ tư thế</span></div>
         <div class="success" id="pSuccess" hidden><span class="han">好</span><b>Đạt!</b></div>
@@ -112,6 +115,15 @@
           <label><input type="checkbox" id="optGhost" checked> Bàn tay 3D hướng dẫn khi sai</label>
           <label><input type="checkbox" id="optSkel"> Hiện khung xương (kỹ thuật)</label>
           <label><input type="checkbox" id="optAuto" checked> Đạt thì tự chuyển bước</label>
+          <label class="opt-row">Vùng chấm điểm
+            <select id="optZone">
+              <option value="auto">Tự động theo khung hình</option>
+              <option value="full">Toàn thân</option>
+              <option value="upper">Thân trên (đứng gần được)</option>
+              <option value="lower">Thân dưới (đặt máy thấp)</option>
+            </select></label>
+          <label class="opt-row" id="camRow" hidden>Camera <select id="optCam"></select></label>
+          <label class="opt-row" id="zoomRow" hidden>Thu phóng <span><input type="range" id="optZoom"> <b id="zoomVal"></b></span></label>
           <label>Mô hình AI <select id="optModel"><option value="lite">Nhẹ (điện thoại)</option><option value="full" selected>Đầy đủ (laptop)</option></select></label>
         </div>
       </details>

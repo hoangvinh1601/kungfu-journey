@@ -106,6 +106,32 @@ function advice(it){
   }
   return '';
 }
+/* Body zones: score only what the camera can see, so the student can stand close. */
+const ZONES = {
+  full:  { name:'Toàn thân', feats:null },
+  upper: { name:'Thân trên', feats:['lElbow','rElbow','lShoulder','rShoulder','torso'] },
+  lower: { name:'Thân dưới', feats:['lHip','rHip','lKnee','rKnee','stance','torso'] },
+};
+function zoneW(w, zone){
+  const z = ZONES[zone]; if(!z || !z.feats) return w;
+  const o = {}; for(const f of FEATS) o[f.id] = z.feats.includes(f.id) ? (w && w[f.id] != null ? w[f.id] : 1) : 0;
+  return o;
+}
+// share of a step's scoring weight that a zone covers (a leg stance can't be passed with arms only)
+function zoneShare(step, zone){
+  const z = ZONES[zone]; if(!z || !z.feats) return 1;
+  let all = 0, inz = 0;
+  FEATS.forEach((f, i) => { if(step.feats[i] == null) return; const wt = step.w && step.w[f.id] != null ? step.w[f.id] : 1; all += wt; if(z.feats.includes(f.id)) inz += wt; });
+  return all ? inz / all : 0;
+}
+function seenZone(pose){
+  if(!pose) return 'full';
+  const feet = vis(pose,'la') || vis(pose,'ra'), head = vis(pose,'nose'), sh = vis(pose,'ls') && vis(pose,'rs'), hips = vis(pose,'lh') && vis(pose,'rh');
+  if(feet && head) return 'full';
+  if(!feet && head && sh) return 'upper';
+  if(feet && hips && !head) return 'lower';
+  return 'full';
+}
 const errorsOf = items => items.filter(it => it.nd>1 && it.wt>=0.5).sort((a,b) => b.nd*b.wt - a.nd*a.wt);
 
 /* ================= Built-in lessons (authored 2D keyframes, camera view) ================= */
@@ -366,9 +392,38 @@ function detectPose(video){
 let stream = null, externalStream = false;
 async function startCamera(video){
   if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) throw Object.assign(new Error('no-media'), { name:'NoMedia' });
-  if(!stream) stream = await navigator.mediaDevices.getUserMedia({ video:{ facingMode:'user', width:{ ideal:1280 }, height:{ ideal:720 } }, audio:false });
+  if(!stream){
+    const want = { width:{ ideal:1280 }, height:{ ideal:720 } };
+    const video = S.camId ? { ...want, deviceId:{ exact:S.camId } } : { ...want, facingMode:'user' };
+    try{ stream = await navigator.mediaDevices.getUserMedia({ video, audio:false }); }
+    catch(e){ if(!S.camId) throw e; S.camId = ''; lsSet('kj-cam', ''); stream = await navigator.mediaDevices.getUserMedia({ video:{ ...want, facingMode:'user' }, audio:false }); }
+  }
   if(video.srcObject !== stream){ video.removeAttribute('src'); video.srcObject = stream; }
   await video.play(); resetFilters();
+  if(!externalStream) setupCamOptions();
+}
+function lsSet(k, v){ try{ localStorage.setItem(k, v); }catch(e){} }
+function lsGet(k, d){ try{ const v = localStorage.getItem(k); return v == null ? d : v; }catch(e){ return d; } }
+/* camera list (wide/ultra-wide lenses show up here when the browser exposes them) and optical zoom when supported */
+async function setupCamOptions(){
+  const sel = $('#optCam'), zoomRow = $('#zoomRow'), zr = $('#optZoom');
+  try{
+    const cams = (await navigator.mediaDevices.enumerateDevices()).filter(d => d.kind === 'videoinput');
+    const cur = stream && stream.getVideoTracks()[0], curId = cur && cur.getSettings().deviceId;
+    sel.innerHTML = cams.map((d, i) => `<option value="${esc(d.deviceId)}">${esc(camLabel(d.label, i))}</option>`).join('');
+    if(curId) sel.value = curId;
+    $('#camRow').hidden = cams.length < 2;
+    const caps = cur && cur.getCapabilities ? cur.getCapabilities() : {};
+    if(caps.zoom && caps.zoom.max > caps.zoom.min){
+      zoomRow.hidden = false; zr.min = caps.zoom.min; zr.max = caps.zoom.max; zr.step = caps.zoom.step || 0.1;
+      zr.value = cur.getSettings().zoom || caps.zoom.min; $('#zoomVal').textContent = (+zr.value).toFixed(1) + '×';
+    } else zoomRow.hidden = true;
+  }catch(e){ $('#camRow').hidden = true; zoomRow.hidden = true; }
+}
+function camLabel(l, i){
+  if(!l) return 'Camera ' + (i + 1);
+  return l.replace(/Back Ultra Wide Camera/i, 'Camera sau góc siêu rộng (0.5×)').replace(/Back Camera/i, 'Camera sau').replace(/Front Camera/i, 'Camera trước')
+          .replace(/ultra ?wide/i, 'góc siêu rộng');
 }
 function stopCamera(){
   if(typeof stopClip === 'function') stopClip();
@@ -937,6 +992,26 @@ $('#optVoice').onchange = e => { S.voice = e.target.checked; if(!S.voice) try{ s
 $('#optGhost').onchange = e => { S.ghost = e.target.checked; };
 $('#optSkel').onchange = e => { S.showSkel = e.target.checked; };
 $('#optAuto').onchange = e => { S.autoNext = e.target.checked; };
+S.zone = lsGet('kj-zone', 'auto'); $('#optZone').value = S.zone;
+$('#optZone').onchange = e => { S.zone = e.target.value; P.zone = null; lsSet('kj-zone', S.zone); toast(S.zone === 'auto' ? 'Tự chọn vùng chấm theo khung hình' : 'Chỉ chấm ' + ZONES[S.zone].name.toLowerCase()); };
+S.camId = lsGet('kj-cam', '');
+$('#optCam').onchange = async e => {
+  if(externalStream){ toast('Trong phòng tập chung, đổi camera bằng cách vào lại phòng.'); return; }
+  S.camId = e.target.value; lsSet('kj-cam', S.camId);
+  if(stream){ stream.getTracks().forEach(t => t.stop()); stream = null; }
+  try{ await startCamera($('#pvideo')); toast('Đã đổi camera'); }catch(err){ toast(camErrorText(err)); }
+};
+$('#optZoom').oninput = e => {
+  const t = stream && stream.getVideoTracks()[0]; $('#zoomVal').textContent = (+e.target.value).toFixed(1) + '×';
+  if(t) t.applyConstraints({ advanced:[{ zoom:+e.target.value }] }).catch(() => {});
+};
+/* far view: full-screen camera with big score and tip, readable from 3 m */
+$('#farBtn').onclick = async () => {
+  const st = $('#pStage'), on = !st.classList.contains('far');
+  st.classList.toggle('far', on); $('#farBtn').textContent = on ? '✕ Thoát xem xa' : '⛶ Xem từ xa';
+  try{ if(on && st.requestFullscreen && !document.fullscreenElement) await st.requestFullscreen(); else if(!on && document.fullscreenElement) await document.exitFullscreen(); }catch(e){}
+};
+document.addEventListener('fullscreenchange', () => { if(!document.fullscreenElement && $('#pStage').classList.contains('far')){ $('#pStage').classList.remove('far'); $('#farBtn').textContent = '⛶ Xem từ xa'; } });
 $('#optModel').onchange = e => { S.model = e.target.value; ensureModel().then(() => toast('Đã đổi mô hình AI')).catch(()=>{}); };
 
 $('#camBtn').onclick = async () => {
@@ -956,17 +1031,21 @@ function setScoreUI(score, verdict, cls){
   arc.style.strokeDashoffset = C*(1 - clamp(score,0,100)/100);
   arc.style.stroke = score>=PASS ? COL.good : score>=60 ? COL.warn : score>0 ? COL.bad : COL.gold;
   $('#scoreNum').textContent = score>0 ? Math.round(score) : '–';
+  const fs = $('#farScore'); fs.textContent = score>0 ? Math.round(score) : '–'; fs.className = score>=PASS ? 'good' : score>=60 ? 'warn' : score>0 ? 'bad' : '';
   const v = $('#verdict'); v.textContent = verdict; v.className = 'pill ' + (cls||'');
 }
 function setFixes(errs, extra){
   const el = $('#fixes');
+  $('#farTip').textContent = extra || (errs.length ? advice(errs[0]) : 'Đúng rồi, giữ nguyên');
   if(extra){ el.innerHTML = `<li class="warn">${esc(extra)}</li>`; return; }
   if(!errs.length){ el.innerHTML = `<li class="good">Tư thế khớp với mẫu. Giữ nguyên.</li>`; return; }
   el.innerHTML = errs.slice(0,4).map(it => `<li class="${it.nd>1.6?'bad':'warn'}"><span>${esc(advice(it))}
     <small>${esc(it.f.label)}: bạn ${fmtFeat(it.f,it.u)}, mẫu ${fmtFeat(it.f,it.r)}</small></span></li>`).join('');
 }
-function framingIssue(pose){
+function framingIssue(pose, zone = 'full'){
   if(!pose) return 'Không thấy người. Hãy đứng vào giữa khung hình.';
+  if(zone === 'upper') return vis(pose,'ls') && vis(pose,'rs') ? null : 'Camera chưa thấy hai vai. Lùi lại một chút.';
+  if(zone === 'lower') return (vis(pose,'la') || vis(pose,'ra')) ? null : 'Hạ máy thấp hơn để camera thấy bàn chân.';
   if(!vis(pose,'la') && !vis(pose,'ra')) return 'Lùi ra xa để camera thấy cả bàn chân.';
   if(!vis(pose,'nose')) return 'Camera chưa thấy đầu. Hạ máy thấp hơn hoặc lùi ra xa.';
   return null;
@@ -974,10 +1053,10 @@ function framingIssue(pose){
 /* Always scored on the student's real body sides (their right = master's right). The camera and the
    3D master are both shown as a mirror, so copying the screen naturally gives the right side.
    If the mirrored version of the pose matches far better, the student used the wrong side. */
-function comparePose(pose, step){
+function comparePose(pose, step, zone = 'full'){
   const uf = features(pose);
-  const a = compareFeats(uf, step.feats, step.w);
-  const b = compareFeats(uf, step.featsM, step.wM);
+  const a = compareFeats(uf, step.feats, zoneW(step.w, zone));
+  const b = compareFeats(uf, step.featsM, zoneW(step.wM, zone));
   return { ...a, wrongSide: b.score >= 70 && b.score > a.score + 15 };
 }
 function keyLimb(step){
@@ -1197,7 +1276,7 @@ function practiceTick(now, dt){
   if(P.state==='countdown'){
     const left = Math.ceil((P.countEnd - now)/1000);
     $('#pCount').hidden = false; $('#pCount').textContent = left>0 ? left : 'Bắt đầu';
-    if(now >= P.countEnd + 500){ $('#pCount').hidden = true; P.state='running'; P.runStart = now; P.rec = []; P.lastRec = 0; P.guideStep = -1; renderPractice(); }
+    if(now >= P.countEnd + 500){ $('#pCount').hidden = true; P.state='running'; P.runStart = now; P.rec = []; P.zoneCount = {}; P.lastRec = 0; P.guideStep = -1; renderPractice(); }
   }
   if(!P.camOn) return;
   if(V3.ok && S.ghost) ensureGhost();
@@ -1213,11 +1292,26 @@ function practiceTick(now, dt){
   else fullUpdate(L, pose, ctx, H, now);
 }
 
+function currentZone(pose, dt){
+  if(S.zone !== 'auto'){ P.zone = S.zone; return P.zone; }
+  const z = seenZone(pose);
+  if(!P.zone) P.zone = z;
+  if(z === P.zone) P.zoneCand = 0; else { P.zoneCand = (P.zoneCand || 0) + (dt || .05); if(P.zoneCand > .8){ P.zone = z; P.zoneCand = 0; } }
+  return P.zone;
+}
+function showZone(zone, share){
+  const t = $('#zoneTag'); if(!t) return;
+  if(zone === 'full'){ t.hidden = true; return; }
+  t.hidden = false; t.className = 'zone-tag' + (share < .35 ? ' warn' : '');
+  t.textContent = 'Đang chấm: ' + ZONES[zone].name + (S.zone === 'auto' ? ' (tự động)' : '');
+}
 function singleUpdate(L, pose, ctx, H, now, dt){
-  const step = L.steps[S.step], issue = framingIssue(pose);
+  const step = L.steps[S.step], zone = currentZone(pose, dt), share = zoneShare(step, zone);
+  const issue = framingIssue(pose, zone) || (pose && share < .35 ? `Thức này cần thấy cả ${zone === 'upper' ? 'chân' : 'tay'}: lùi xa hơn hoặc chọn "Toàn thân".` : null);
+  if(now - (P.zoneUI || 0) > 300){ P.zoneUI = now; showZone(zone, share); }
   const video = $('#pvideo');
   if(!pose){ renderHand(video, null, false, null, dt); $('#coachTag').hidden = true; setBanner('#pBanner', issue); P.hold = Math.max(0, P.hold - dt*2); updateHold(); if(now-P.lastUI>250){ setScoreUI(0,'Không thấy người',''); setFixes([], issue); P.lastUI=now; } return; }
-  const r = comparePose(pose, step);
+  const r = comparePose(pose, step, zone);
   P.score = P.score*0.7 + r.score*0.3;
   const errs = errorsOf(r.items);
   const passing = !issue && r.coverage >= 0.6 && P.score >= PASS && !errs.some(e => e.wt>=1 && e.nd>1.5);
@@ -1317,7 +1411,9 @@ $('#fullStop').onclick = () => finishFull();
 function abortFull(){ P.state='idle'; $('#pCount').hidden = true; $('#guideTag').hidden = true; renderPractice(); }
 
 function fullUpdate(L, pose, ctx, H, now){
-  const issue = framingIssue(pose);
+  const zone = currentZone(pose, P.lastFull ? (now - P.lastFull)/1000 : .05), issue = framingIssue(pose, zone);
+  if(now - (P.zoneUI || 0) > 300){ P.zoneUI = now; showZone(zone, 1); }
+  if(P.state === 'running' && pose){ P.zoneCount = P.zoneCount || {}; P.zoneCount[zone] = (P.zoneCount[zone] || 0) + 1; }
   if(P.state==='running'){
     const t = (now - P.runStart)/1000 * tempo();
     const f = L.seqStart + t*FPS;
@@ -1329,7 +1425,7 @@ function fullUpdate(L, pose, ctx, H, now){
     if(now - P.lastRec >= 100){ P.rec.push(pose ? pose.map(q => q.slice()) : null); P.lastRec = now; }
     const dtF = P.lastFull ? Math.min(.2, (now - P.lastFull)/1000) : 0; P.lastFull = now;
     if(pose){
-      const r = compareFeats(features(pose), features(gpose), L.steps[si].w), errs = errorsOf(r.items);
+      const r = compareFeats(features(pose), features(gpose), zoneW(L.steps[si].w, zone)), errs = errorsOf(r.items);
       P.score = P.score*0.7 + r.score*0.3;
       drawUserOverlay(ctx, H, pose, r.score >= PASS ? 'good' : r.score >= 60 ? 'warn' : 'bad', r.items);
       P.wrongFull = r.score < 72 ? (P.wrongFull || 0) + dtF : 0;
@@ -1350,7 +1446,8 @@ function finishFull(){
   if(P.state!=='running') return;
   P.state = 'analyzing'; $('#guideTag').hidden = true; setBanner('#pBanner', null);
   const L = lessonById(S.lessonId);
-  const res = analyzeRun(L, P.rec);
+  const zc = P.zoneCount || {}, runZone = Object.keys(zc).sort((a, b) => zc[b] - zc[a])[0] || 'full';
+  const res = analyzeRun(L, P.rec, runZone);
   P.state = 'idle'; renderPractice(); updateRefInfo(0);
   if(res.error){ toast(res.error); say(res.error); try{ HOOKS.onFullResult && HOOKS.onFullResult({ lessonId:L.id, overall:0, error:res.error }); }catch(e){} return; }
   saveProgress(L.id, { full:res.overall });
@@ -1382,15 +1479,15 @@ function dtw(uF, rF, rW){
   path.reverse();
   return { cost, m, path, avg: D[(n-1)*m+jEnd]/path.length };
 }
-function analyzeRun(L, rec){
+function analyzeRun(L, rec, zone = 'full'){
   const valid = rec.map((p,j) => ({ p, j })).filter(o => o.p);
   if(valid.length < 10) return { error:'Không đủ dữ liệu để chấm: camera không thấy bạn trong phần lớn thời gian tập.' };
   const uF = valid.map(o => features(o.p));
   const idx = []; for(let i=L.seqStart;i<=L.seqEnd;i++) idx.push(i);
   const nearest = i => L.steps[stepAtFrame(L, i)];
   // scored on real sides; the mirrored run is only used to tell the student they practised the wrong side
-  const best = { ...dtw(uF, idx.map(i => L.feats[i]), idx.map(i => nearest(i).w)), mir:false };
-  const mirRun = dtw(uF, idx.map(i => features(mirrorPose(L.frames[i]))), idx.map(i => nearest(i).wM));
+  const best = { ...dtw(uF, idx.map(i => L.feats[i]), idx.map(i => zoneW(nearest(i).w, zone))), mir:false };
+  const mirRun = dtw(uF, idx.map(i => features(mirrorPose(L.frames[i]))), idx.map(i => zoneW(nearest(i).wM, zone)));
   const wrongSide = mirRun.avg < best.avg * 0.75;
 
   const steps = L.steps.map((st, si) => {
@@ -1398,7 +1495,7 @@ function analyzeRun(L, rec){
     best.path.forEach(([i,j]) => { if(Math.abs(i-k) <= 4) cand.add(j); });
     let top = null;
     cand.forEach(j => {
-      const r = compareFeats(uF[j], best.mir ? st.featsM : st.feats, best.mir ? st.wM : st.w);
+      const r = compareFeats(uF[j], best.mir ? st.featsM : st.feats, zoneW(best.mir ? st.wM : st.w, zone));
       if(!top || r.score > top.score) top = { score:r.score, items:r.items, user:valid[j].p };
     });
     return { idx:si, step:st, ref: best.mir ? st.poseM : st.pose, ...(top || { score:0, items:[], user:null }) };
