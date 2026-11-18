@@ -15,17 +15,19 @@ App luyện võ trên trình duyệt. Học viên xem võ sư làm mẫu bằng 
 
 | Nhân vật | Nguồn |
 |---|---|
-| Võ sinh Vovinam, Tăng nhân Thiếu Lâm, Nữ hiệp, Mộc nhân | Tự dựng bằng Blender, script ở `blender/make_characters.py` |
+| Sư phụ Kungfu, Võ sư Vovinam, Nữ võ sinh, Võ sinh Karate | Người thật dựng bằng MakeHuman / MPFB2 trong Blender, tài nguyên CC0. Script ở `blender/make_humans.py` |
 | Michelle, X Bot, Soldier | Nhân vật Mixamo (Adobe) lấy từ kho mẫu của three.js, tải qua CDN |
 
 Khung xương đặt tên chuẩn Mixamo (`mixamorig:Hips`, `LeftArm`…). Bạn có thể nạp nhân vật `.glb` của riêng mình bằng nút **Tải .glb** trong trang Học động tác.
 
-Dựng lại hoặc chỉnh nhân vật (cần Python 3.13):
+### Dựng lại nhân vật
 
-```bash
-pip install bpy
-python3 blender/make_characters.py models
-```
+1. `pip install bpy` (Blender 5.x, Python 3.13)
+2. Cài extension MPFB2 từ [extensions.blender.org](https://extensions.blender.org/add-ons/mpfb/)
+3. Tải gói **MakeHuman system assets** và **skins01/02** (CC0) từ [makehumancommunity.org](https://static.makehumancommunity.org/assets/assetpacks.html), giải nén vào thư mục dữ liệu của MPFB
+4. `python3 blender/make_humans.py models` (hoặc thêm tên nhân vật, ví dụ `su_phu`)
+
+Muốn thêm nhân vật mới, sửa bảng `HUMANS` trong script: giới tính, tuổi, cơ bắp, chủng tộc, da, tóc, quần áo, màu nhuộm, đai.
 
 ## Chạy trên máy
 

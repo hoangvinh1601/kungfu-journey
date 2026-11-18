@@ -874,16 +874,16 @@ const CHAR_BASES = ['https://cdn.jsdelivr.net/gh/mrdoob/three.js@r160/examples/m
 const KJ_REPO = 'https://cdn.jsdelivr.net/gh/hoangvinh1601/kungfu-journey@main/';
 const own = f => [`models/${f}`, KJ_REPO + `models/${f}`];   // built in Blender, shipped with the app
 const CHARACTERS = [
-  { id:'vovinam',  name:'Võ sinh Vovinam',      urls: own('vovinam.glb') },
-  { id:'monk',     name:'Tăng nhân Thiếu Lâm',  urls: own('monk.glb') },
-  { id:'heroine',  name:'Nữ hiệp',              urls: own('heroine.glb') },
-  { id:'wooden',   name:'Mộc nhân',             urls: own('wooden.glb') },
+  { id:'su_phu',     name:'Sư phụ Kungfu',        urls: own('su_phu.glb') },
+  { id:'vovinam',    name:'Võ sư Vovinam',        urls: own('vovinam.glb') },
+  { id:'nu_vo_sinh', name:'Nữ võ sinh',           urls: own('nu_vo_sinh.glb') },
+  { id:'karate',     name:'Võ sinh Karate',       urls: own('karate.glb') },
   { id:'michelle', name:'Michelle (Mixamo)',    file:'Michelle.glb' },
   { id:'xbot',     name:'X Bot (Mixamo)',       file:'Xbot.glb' },
   { id:'soldier',  name:'Soldier (Mixamo)',     file:'Soldier.glb' },
 ];
 const V3 = { ok:false, failed:false, loading:null, mirror:true, auto:false, bones:false, keys:true,
-  charId: store.get('kj_char', 'vovinam'), host:null, camAnim:null, size:[0,0], avatar:null };
+  charId: store.get('kj_char2', 'su_phu'), host:null, camAnim:null, size:[0,0], avatar:null };
 let T3 = null;
 
 const BONE_ALIASES = {
@@ -947,7 +947,8 @@ function curlFingers(bones){
   for(const side of ['left','right']){
     const hand = get(side+'hand'), i1 = get(side+'handindex1'), p1 = get(side+'handpinky1') || get(side+'handring1');
     if(!hand || !i1 || !p1) continue;
-    const palm = () => { const hp = wpos(hand), n = new T3.Vector3().crossVectors(wpos(i1).sub(hp), wpos(p1).sub(hp)).normalize(); if(n.y > 0) n.negate(); return n; };
+    // palm normal from the hand's own chirality (works for T-pose and A-pose rigs)
+    const palm = () => { const hp = wpos(hand), n = new T3.Vector3().crossVectors(wpos(i1).sub(hp), wpos(p1).sub(hp)).normalize(); return side==='left' ? n.negate() : n; };
     const curl = (bone, deg) => {
       if(!bone || !bone.children.length) return;
       const dir = wpos(bone.children[0]).sub(wpos(bone)).normalize(), axis = new T3.Vector3().crossVectors(dir, palm());
@@ -963,7 +964,17 @@ function buildAvatar(model){
   const byName = {}, bones = [];
   model.traverse(o => {
     if(o.isBone){ bones.push(o); const n = normName(o.name); if(!(n in byName)) byName[n] = o; }
-    if(o.isMesh){ o.castShadow = true; o.frustumCulled = false; }
+    if(o.isMesh){
+      o.castShadow = true; o.frustumCulled = false;
+      // exporters often mark every material as alpha-blended; that breaks draw order (black eyes, see-through skin)
+      const hairy = /brow|lash|hair|short0|long0|ponytail|bob0|braid|afro/i.test(o.name + ' ' + [].concat(o.material).map(m => m.name).join(' '));
+      [].concat(o.material).forEach(m => {
+        if(!m.transparent) return;
+        if(hairy){ m.transparent = false; m.alphaTest = 0.45; m.depthWrite = true; }
+        else if(m.opacity >= 0.99){ m.transparent = false; m.depthWrite = true; }
+        m.needsUpdate = true;
+      });
+    }
   });
   const b = {};
   for(const [k, al] of Object.entries(BONE_ALIASES)) for(const a of al) if(byName[a] && !b[k]){ b[k] = byName[a]; }
@@ -1157,7 +1168,7 @@ document.addEventListener('click', e => {
 document.addEventListener('change', async e => {
   if(e.target.matches('[data-v3char]')){
     const id = e.target.value;
-    try{ await loadCharacter(id); V3.charId = id; store.set('kj_char', id); }catch(err){ toast('Không tải được nhân vật này.'); }
+    try{ await loadCharacter(id); V3.charId = id; store.set('kj_char2', id); }catch(err){ toast('Không tải được nhân vật này.'); }
     syncBars();
   }
   if(e.target.matches('[data-v3file]')){
