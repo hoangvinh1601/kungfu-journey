@@ -74,7 +74,7 @@ function featVal(p,f){
   return ang(g(p,f.pts[0]), g(p,f.pts[1]), g(p,f.pts[2]));
 }
 const features = p => FEATS.map(f => featVal(p,f));
-const fmtFeat = (f,v) => v==null ? '–' : f.kind==='stance' ? v.toFixed(1)+'× vai' : Math.round(v)+'°';
+const fmtFeat = (f,v) => v==null ? '–' : f.kind==='hand' ? v : f.kind==='stance' ? v.toFixed(1)+'× vai' : Math.round(v)+'°';
 
 function featScore(nd){ return nd<=1 ? 1-0.25*nd : Math.max(0, 0.75-0.375*(nd-1)); }
 function compareFeats(uf, rf, w, withItems=true){
@@ -93,6 +93,7 @@ function compareFeats(uf, rf, w, withItems=true){
   return { score: raw*Math.min(1, coverage/0.8), coverage, items };
 }
 function advice(it){
+  if(it.f.kind === 'hand') return it.msg || `Tay ${SIDE[it.f.side]}: ${it.r.toLowerCase()}`;
   const s = SIDE[it.f.side], more = it.d>0;
   switch(it.f.kind){
     case 'elbow':    return more ? `Co khuỷu tay ${s} lại` : `Duỗi tay ${s} thẳng hơn`;
@@ -134,6 +135,16 @@ function seenZone(pose){
 }
 const errorsOf = items => items.filter(it => it.nd>1 && it.wt>=0.5).sort((a,b) => b.nd*b.wt - a.nd*a.wt);
 
+/* ================= Hand forms (thủ hình) ================= */
+// curl per finger: 0 straight … 1 closed. Order: thumb, index, middle, ring, pinky.
+const SHAPES = {
+  fist:  { name:'Quyền',     curl:[.8, 1, 1, 1, 1],   how:'nắm chặt các ngón thành quyền' },
+  palm:  { name:'Chưởng',    curl:[.2, 0, 0, 0, 0],   how:'duỗi thẳng và khép các ngón (chưởng)' },
+  sword: { name:'Kiếm chỉ',  curl:[.9, 0, 0, 1, 1],   how:'duỗi ngón trỏ và ngón giữa, co hai ngón còn lại' },
+  claw:  { name:'Hổ trảo',   curl:[.5, .55, .55, .55, .55], how:'co nửa các ngón, mở rộng như móng hổ' },
+};
+const FINGER_NAMES = ['ngón cái', 'ngón trỏ', 'ngón giữa', 'ngón áp út', 'ngón út'];
+
 /* ================= Built-in lessons (authored 2D keyframes, camera view) ================= */
 // 2D keyframes as seen by a camera facing the student (x right = student's LEFT, y down), third value = depth toward camera.
 const SALUTE = { nose:[.5,.12,.02], ls:[.58,.25], rs:[.42,.25], le:[.645,.38,.05], re:[.355,.38,.05], lw:[.525,.33,.14], rw:[.475,.33,.14],
@@ -145,6 +156,8 @@ const HORSE_PL = { ...HORSE, le:[.70,.33], lw:[.82,.33] };
 const BOW_L = { nose:[.52,.20,.01], ls:[.60,.33], rs:[.44,.33], le:[.705,.44,-.03], re:[.34,.45,-.03], lw:[.655,.55,.05], rw:[.39,.56,.05],
   lh:[.575,.60], rh:[.465,.60], lk:[.72,.74,.03], rk:[.3675,.76], la:[.73,.92], ra:[.27,.92] };
 const BOW_L_BLOCK = { ...BOW_L, le:[.70,.21,.06], lw:[.56,.13,.10] };
+const HANDS_UP = { nose:[.5,.12,.02], ls:[.58,.25], rs:[.42,.25], le:[.655,.40,.04], re:[.345,.40,.04], lw:[.585,.29,.16], rw:[.415,.29,.16],
+  lh:[.555,.52], rh:[.445,.52], lk:[.535,.72], rk:[.465,.72], la:[.53,.92], ra:[.47,.92] };
 const CRANE_L = { nose:[.5,.12,.01], ls:[.58,.25], rs:[.42,.25], le:[.70,.22], re:[.30,.22], lw:[.82,.18], rw:[.18,.18],
   lh:[.555,.52], rh:[.445,.52], lk:[.64,.46,.15], rk:[.45,.72,.02], la:[.60,.66,.07], ra:[.455,.92] };
 
@@ -156,12 +169,13 @@ const W = {
   craneL:{ lHip:1.5, lKnee:1, rKnee:1.2, rHip:.8, stance:0, lElbow:.8, rElbow:.8, lShoulder:1.2, rShoulder:1.2, torso:1 },
 };
 W.bowLBlock = { ...W.bowL, lElbow:1.2, lShoulder:1.5 };
+W.hands = { lElbow:.6, rElbow:.6, lShoulder:.5, rShoulder:.5, torso:.3, lHip:0, rHip:0, lKnee:0, rKnee:0, stance:0 };
 
 const BUILTIN = [
   { id:'tan-phap', han:'步法', name:'Tấn pháp căn bản', level:'Nhập môn',
     desc:'Sáu thế đứng nền tảng của mọi bài quyền. Luyện cho chân khoẻ, trọng tâm vững trước khi học đòn tay. Đứng chính diện với camera.',
     steps:[
-      { name:'Bão quyền lễ', han:'抱拳', pose:mk(SALUTE), w:W.salute, desc:'Thế chào mở đầu và kết thúc mỗi buổi tập.',
+      { name:'Bão quyền lễ', han:'抱拳', pose:mk(SALUTE), w:W.salute, hand:{ l:'palm', r:'fist' }, handW:.25, desc:'Thế chào mở đầu và kết thúc mỗi buổi tập.',
         cue:['Hai chân khép, đứng thẳng','Quyền phải áp vào lòng bàn tay trái, trước ngực','Khuỷu tay mở sang hai bên, vai thả lỏng'] },
       { name:'Mã bộ', han:'馬步', pose:mk(HORSE), w:W.horse, desc:'Tấn ngựa: hạ trọng tâm như đang cưỡi ngựa.',
         cue:['Hai bàn chân rộng khoảng 2,5 lần vai','Khuỵu gối, gối mở ra ngoài theo hướng mũi chân','Lưng thẳng, hai quyền thủ ngang hông'] },
@@ -179,9 +193,9 @@ const BUILTIN = [
     steps:[
       { name:'Khởi thế', han:'起勢', pose:mk(SALUTE), w:W.salute, desc:'Chào và định thần trước khi vào bài.',
         cue:['Đứng khép chân','Ôm quyền trước ngực','Mắt nhìn thẳng'] },
-      { name:'Mã bộ xung quyền phải', han:'衝拳', pose:mk(HORSE_PR), w:W.horsePR, desc:'Xuống mã bộ, đấm quyền phải sang ngang.',
+      { name:'Mã bộ xung quyền phải', han:'衝拳', pose:mk(HORSE_PR), w:W.horsePR, hand:{ r:'fist' }, handW:.2, desc:'Xuống mã bộ, đấm quyền phải sang ngang.',
         cue:['Giữ mã bộ thấp, gối mở','Tay phải duỗi thẳng ngang vai','Quyền trái thủ ở hông'] },
-      { name:'Mã bộ xung quyền trái', han:'衝拳', pose:mk(HORSE_PL), w:mirrorW(W.horsePR), desc:'Thu quyền phải, đấm quyền trái.',
+      { name:'Mã bộ xung quyền trái', han:'衝拳', pose:mk(HORSE_PL), w:mirrorW(W.horsePR), hand:{ l:'fist' }, handW:.2, desc:'Thu quyền phải, đấm quyền trái.',
         cue:['Tấn không đổi','Tay trái duỗi thẳng ngang vai','Quyền phải rút về hông'] },
       { name:'Cung bộ thượng giá trái', han:'上架', pose:mk(BOW_L_BLOCK), w:W.bowLBlock, desc:'Chuyển cung bộ trái, tay trái gạt đỡ trên đầu.',
         cue:['Gối trái khuỵu, chân phải thẳng','Cẳng tay trái nằm ngang trên trán','Quyền phải ở hông'] },
@@ -191,6 +205,20 @@ const BUILTIN = [
         cue:['Trụ chân phải','Gối trái nhấc cao ngang hông','Hai tay dang ngang'] },
       { name:'Thu thế', han:'收勢', pose:mk(SALUTE), w:W.salute, desc:'Thu chân, chào kết thúc.',
         cue:['Khép chân','Ôm quyền','Thở ra chậm'] },
+    ] },
+  { id:'thu-hinh', han:'手形', name:'Thủ hình căn bản', level:'Nhập môn',
+    desc:'Các hình bàn tay của võ cổ truyền: quyền, chưởng, kiếm chỉ, hổ trảo. Đứng gần camera, đưa hai tay trước ngực cho camera thấy rõ các ngón.',
+    steps:[
+      { name:'Quyền', han:'拳', pose:mk(HANDS_UP), w:W.hands, hand:{ l:'fist', r:'fist' }, handW:.75, desc:'Nắm đấm: bốn ngón cuộn chặt, ngón cái khoá ngoài.',
+        cue:['Cuộn bốn ngón vào lòng bàn tay','Ngón cái ép lên đốt giữa ngón trỏ và ngón giữa','Mặt quyền phẳng, cổ tay thẳng'] },
+      { name:'Chưởng', han:'掌', pose:mk(HANDS_UP), w:W.hands, hand:{ l:'palm', r:'palm' }, handW:.75, desc:'Bàn tay thẳng, các ngón khép sát, dùng cạnh hoặc lòng bàn tay.',
+        cue:['Duỗi thẳng bốn ngón, khép sát nhau','Ngón cái gập nhẹ vào cạnh bàn tay','Cổ tay hơi ngửa ra sau'] },
+      { name:'Kiếm chỉ', han:'劍指', pose:mk(HANDS_UP), w:W.hands, hand:{ l:'sword', r:'sword' }, handW:.75, desc:'Ngón trỏ và ngón giữa duỗi như lưỡi kiếm.',
+        cue:['Duỗi thẳng ngón trỏ và ngón giữa, khép sát','Co ngón áp út và ngón út','Ngón cái đè lên hai ngón đang co'] },
+      { name:'Hổ trảo', han:'虎爪', pose:mk(HANDS_UP), w:W.hands, hand:{ l:'claw', r:'claw' }, handW:.75, desc:'Móng hổ: các ngón co nửa chừng, căng và mở rộng.',
+        cue:['Mở rộng năm ngón','Gập hai đốt đầu của mỗi ngón như móng vuốt','Giữ căng các ngón, lòng bàn tay hướng ra trước'] },
+      { name:'Bão quyền', han:'抱拳', pose:mk(SALUTE), w:W.hands, hand:{ l:'palm', r:'fist' }, handW:.75, desc:'Ôm quyền: quyền phải áp vào chưởng trái.',
+        cue:['Tay trái là chưởng, tay phải là quyền','Áp mặt quyền phải vào lòng bàn tay trái','Đặt trước ngực, khuỷu mở'] },
     ] },
 ];
 
@@ -293,7 +321,7 @@ function gong(){
 }
 
 /* ================= MediaPipe ================= */
-let landmarker = null, loadingP = null, loadedModel = null, lastTs = 0;
+let landmarker = null, loadingP = null, loadedModel = null, lastTs = 0, mpFileset = null;
 function setModelStatus(s, msg){
   const el = $('#modelStatus'); el.dataset.s = s;
   el.querySelector('span').textContent = msg || ({ idle:'AI chưa tải', loading:'Đang tải AI…', ready:'AI sẵn sàng', error:'Lỗi tải AI' })[s];
@@ -304,7 +332,7 @@ async function ensureModel(){
   loadingP = (async () => {
     setModelStatus('loading');
     const { PoseLandmarker, FilesetResolver } = await import('@mediapipe/tasks-vision');
-    const fileset = await FilesetResolver.forVisionTasks(`${MP_URL}/wasm`);
+    const fileset = mpFileset = mpFileset || await FilesetResolver.forVisionTasks(`${MP_URL}/wasm`);
     const opts = delegate => ({ baseOptions:{ modelAssetPath: MODEL_URLS[S.model], delegate }, runningMode:'VIDEO', numPoses:1,
       minPoseDetectionConfidence:.5, minPosePresenceConfidence:.5, minTrackingConfidence:.5, outputSegmentationMasks:true });
     if(landmarker){ try{ landmarker.close(); }catch(e){} landmarker = null; }
@@ -316,6 +344,108 @@ async function ensureModel(){
   })().catch(e => { console.error(e); setModelStatus('error'); toast('Không tải được mô hình AI. Kiểm tra kết nối mạng rồi thử lại.'); throw e; })
      .finally(() => { loadingP = null; });
   return loadingP;
+}
+
+/* ---- Hands: 21 points per hand, loaded only when a step needs the fingers ---- */
+const HAND_URL = 'https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task';
+let handLm = null, handP = null, handTs = 0, handTick = 0;
+const HANDS = { l:null, r:null };          // { pts:[[x,y,z]…21] in height units, curl:[5], shape, at }
+async function ensureHands(){
+  if(handLm) return handLm; if(handP) return handP;
+  handP = (async () => {
+    const { HandLandmarker, FilesetResolver } = await import('@mediapipe/tasks-vision');
+    const fileset = mpFileset = mpFileset || await FilesetResolver.forVisionTasks(`${MP_URL}/wasm`);
+    const opts = delegate => ({ baseOptions:{ modelAssetPath:HAND_URL, delegate }, runningMode:'VIDEO', numHands:2,
+      minHandDetectionConfidence:.5, minHandPresenceConfidence:.5, minTrackingConfidence:.5 });
+    try{ handLm = await HandLandmarker.createFromOptions(fileset, opts('GPU')); }
+    catch(e){ handLm = await HandLandmarker.createFromOptions(fileset, opts('CPU')); }
+    return handLm;
+  })().catch(e => { console.warn('hand model', e); toast('Không tải được mô hình bàn tay.'); handP = null; throw e; });
+  return handP;
+}
+const handsWanted = step => S.fingers || !!(step && step.hand);
+const HAND_BONES = [[0,1],[1,2],[2,3],[3,4],[0,5],[5,6],[6,7],[7,8],[5,9],[9,10],[10,11],[11,12],[9,13],[13,14],[14,15],[15,16],[13,17],[0,17],[17,18],[18,19],[19,20]];
+function ang3(a, b, c){
+  const u = [a[0]-b[0], a[1]-b[1], a[2]-b[2]], v = [c[0]-b[0], c[1]-b[1], c[2]-b[2]];
+  const d = Math.hypot(...u) * Math.hypot(...v); return d ? Math.acos(clamp((u[0]*v[0]+u[1]*v[1]+u[2]*v[2])/d, -1, 1)) * 180/Math.PI : 180;
+}
+// 0 = straight … 1 = fully curled, from the bend of the finger joints
+function fingerCurls(h){
+  const bend = (a, b, c, d) => (180 - ang3(h[a], h[b], h[c])) + (180 - ang3(h[b], h[c], h[d]));
+  const palm = Math.hypot(h[9][0]-h[0][0], h[9][1]-h[0][1], h[9][2]-h[0][2]) || 1e-3;
+  const thumbIn = Math.hypot(h[4][0]-h[9][0], h[4][1]-h[9][1], h[4][2]-h[9][2]) / palm;   // thumb tip near the middle knuckle = tucked
+  const thumb = clamp(Math.max(((180 - ang3(h[2], h[3], h[4])) - 10) / 60, (1.1 - thumbIn) / .7), 0, 1);
+  return [thumb, ...[[5,6,7,8],[9,10,11,12],[13,14,15,16],[17,18,19,20]].map(f => clamp((bend(...f) - 25) / 155, 0, 1))];
+}
+function shapeOf(curl){
+  let best = null;
+  for(const [id, sh] of Object.entries(SHAPES)){
+    const d = sh.curl.reduce((a, t, i) => a + Math.abs(t - curl[i]) * (i ? 1 : .4), 0);
+    if(!best || d < best.d) best = { id, d };
+  }
+  return best.d < 1.6 ? best.id : null;
+}
+function detectHands(video, pose){
+  if(!handLm || video.readyState < 2 || !video.videoWidth) return;
+  if((handTick++) % 2) return;                      // every other frame is plenty for finger shapes
+  let ts = performance.now(); if(ts <= handTs) ts = handTs + 1; handTs = ts;
+  let res; try{ res = handLm.detectForVideo(video, ts); }catch(e){ if(window.__kjDebug) console.warn('hands', e); return; }
+  if(window.__kjDebug) window.__kjHands = { n:(res.landmarks || []).length, HANDS };
+  const asp = video.videoWidth / video.videoHeight, now = performance.now(), got = [];
+  (res && res.landmarks || []).forEach((lm, i) => {
+    const pts = lm.map(q => [q.x*asp, q.y, q.z*asp]);
+    // which arm is it? nearest body wrist; the model's own label assumes a mirrored image, so it is swapped here
+    let side = null;
+    if(pose){
+      const dl = vis(pose,'lw') ? dist(pts[0], g(pose,'lw')) : 9, dr = vis(pose,'rw') ? dist(pts[0], g(pose,'rw')) : 9;
+      if(Math.min(dl, dr) < .25) side = dl < dr ? 'l' : 'r';
+    }
+    if(!side){ const lab = res.handedness && res.handedness[i] && res.handedness[i][0] && res.handedness[i][0].categoryName; side = lab === 'Left' ? 'r' : 'l'; }
+    got.push({ side, pts, d: pose && vis(pose, side+'w') ? dist(pts[0], g(pose, side+'w')) : 0 });
+  });
+  // two hands claimed by the same arm: in the raw (unmirrored) frame the student's right hand is the one further left
+  if(got.length === 2 && got[0].side === got[1].side){ const [a, b] = got[0].pts[0][0] < got[1].pts[0][0] ? got : [got[1], got[0]]; a.side = 'r'; b.side = 'l'; a.d = b.d = 0; }
+  for(const side of ['l','r']){
+    const c = got.filter(h => h.side === side).sort((a, b) => a.d - b.d)[0];
+    if(!c){ if(HANDS[side] && now - HANDS[side].at > 1200) HANDS[side] = null; continue; }
+    const curl = fingerCurls(c.pts), prev = HANDS[side];
+    const sm = prev ? curl.map((v, i) => prev.curl[i]*.55 + v*.45) : curl;    // steady the reading
+    HANDS[side] = { pts:c.pts, curl:sm, shape:shapeOf(sm), at:now };
+  }
+}
+/* score the hands against the step's hand forms → items like the joint features */
+function handItems(step){
+  const out = { items:[], score:100, missing:[] }; if(!step.hand) return out;
+  const now = performance.now(); let sum = 0, n = 0;
+  const fresh = k => HANDS[k] && now - HANDS[k].at <= 1200;
+  // same form on both hands: practising one hand at a time is fine (e.g. holding the phone with the other)
+  const oneOk = step.hand.l && step.hand.l === step.hand.r && (fresh('l') !== fresh('r'));
+  for(const side of ['l','r']){
+    const want = step.hand[side]; if(!want || (oneOk && !fresh(side))) continue;
+    const h = HANDS[side], f = { id:side+'Hand', label:'Bàn tay ' + SIDE[side], kind:'hand', side, pts:[] };
+    if(!h || now - h.at > 1200){ out.missing.push(side); sum += 0; n++; out.items.push({ f, d:0, nd:2, s:0, wt:1.2, u:null, r:SHAPES[want].name, msg:`Đưa bàn tay ${SIDE[side]} vào khung hình` }); continue; }
+    const tgt = SHAPES[want].curl, diff = tgt.map((t, i) => Math.abs(t - h.curl[i]) * (i ? 1 : .5));
+    const sc = clamp(100 * (1 - (diff.reduce((a, b) => a + b, 0) / 4.5) * 1.8), 0, 100);
+    sum += sc; n++;
+    const worst = diff.indexOf(Math.max(...diff)), more = h.curl[worst] > tgt[worst];
+    const msg = diff[worst] > .2 ? `Tay ${SIDE[side]}: ${more ? 'duỗi' : 'co'} ${FINGER_NAMES[worst]} thêm (${SHAPES[want].name.toLowerCase()})` : `Tay ${SIDE[side]}: ${SHAPES[want].how}`;
+    out.items.push({ f, d:0, nd: sc >= 80 ? .6 : sc >= 60 ? 1.3 : 2, s:sc/100, wt:1.2, u: h.shape ? SHAPES[h.shape].name : 'chưa rõ', r:SHAPES[want].name, msg, hs:sc });
+  }
+  out.score = n ? sum / n : 100;
+  return out;
+}
+function drawHands(ctx, H, step){
+  const now = performance.now();
+  for(const side of ['l','r']){
+    const h = HANDS[side]; if(!h || now - h.at > 1200) continue;
+    const want = step && step.hand && step.hand[side];
+    const col = !want ? 'rgba(241,230,207,.9)' : h.shape === want ? COL.good : COL.bad;
+    ctx.save(); ctx.strokeStyle = col; ctx.fillStyle = col; ctx.lineWidth = Math.max(2, H/320); ctx.lineCap = 'round';
+    ctx.shadowColor = col; ctx.shadowBlur = 6;
+    ctx.beginPath(); HAND_BONES.forEach(([a, b]) => { ctx.moveTo(h.pts[a][0]*H, h.pts[a][1]*H); ctx.lineTo(h.pts[b][0]*H, h.pts[b][1]*H); }); ctx.stroke();
+    [4,8,12,16,20].forEach(i => { ctx.beginPath(); ctx.arc(h.pts[i][0]*H, h.pts[i][1]*H, Math.max(2.5, H/220), 0, 7); ctx.fill(); });
+    ctx.restore();
+  }
 }
 
 /* One Euro filter to steady landmarks without lagging fast strikes */
@@ -630,16 +760,30 @@ function buildAvatar(model){
   const box = new T3.Box3(); bones.forEach(o => box.expandByPoint(wpos(o)));
   const s = 1.68 / Math.max(1e-6, box.max.y - box.min.y), hip0 = wpos(b.hips);
   root.scale.setScalar(s); root.position.set(-hip0.x*s, -box.min.y*s + 0.035, -hip0.z*s); root.updateMatrixWorld(true);
+  const fingerRe = /^(left|right)hand(thumb|index|middle|ring|pinky)(\d)$/;
+  const fingers = bones.filter(o => fingerRe.test(normName(o.name)));
+  fingers.forEach(o => o.userData.open = o.quaternion.clone());
   curlFingers(bones);
   bones.forEach(o => o.userData.rest = o.quaternion.clone());
+  fingers.forEach(o => { const [, side, f] = normName(o.name).match(fingerRe); o.userData.finger = { side: side === 'left' ? 'l' : 'r', i: ['thumb','index','middle','ring','pinky'].indexOf(f) }; });
   root.updateMatrixWorld(true);
   const feet = [b.lFoot, b.rFoot, b.lToe, b.rToe].filter(Boolean);
   const footMin = Math.min(...feet.map(f => wpos(f).y));
   const restFootQ = { l: b.lFoot.getWorldQuaternion(new T3.Quaternion()), r: b.rFoot.getWorldQuaternion(new T3.Quaternion()) };
   const restFwd = new T3.Vector3().crossVectors(wpos(b.lUpLeg).sub(wpos(b.rUpLeg)), wpos(b.neck).sub(wpos(b.hips))); restFwd.y = 0; restFwd.normalize();
-  return { root, model, b, bones, restPos: root.position.clone(), footMin, feet, restFootQ, restFwd };
+  return { root, model, b, bones, fingers, restPos: root.position.clone(), footMin, feet, restFootQ, restFwd };
 }
 
+/* finger pose of the 3D master: slerp each finger joint between open and the default fist */
+function setAvatarHands(av, hands, mir){
+  if(!av || !av.fingers || !av.fingers.length) return;
+  av.fingers.forEach(o => {
+    const fd = o.userData.finger, side = mir ? (fd.side === 'l' ? 'r' : 'l') : fd.side;
+    const shape = hands && hands[side];
+    const t = shape ? SHAPES[shape].curl[fd.i] : 1;
+    o.quaternion.copy(o.userData.open).slerp(o.userData.rest, t);
+  });
+}
 function applyPose3D(pts, av = V3.avatar){
   if(!av || !pts) return;
   av.bones.forEach(o => o.quaternion.copy(o.userData.rest)); av.root.position.copy(av.restPos); av.root.updateMatrixWorld(true);
@@ -762,7 +906,7 @@ function render3D(host, pts, opt = {}){
     const dir = V3.cam.position.clone().sub(V3.ctr.target).normalize(); V3.cam.position.copy(V3.ctr.target).addScaledVector(dir, fitDistance());
   }
   const mir = mirrorNow();
-  if(pts) applyPose3D(mir ? mirror3(pts) : pts);
+  if(pts){ applyPose3D(mir ? mirror3(pts) : pts); setAvatarHands(V3.avatar, V3.hands, mir); }
   const keys = V3.keys ? (opt.keys || []).map(k => mir ? swapFeat(k) : k) : [];
   V3.markers.forEach((m, i) => {
     const bn = keys[i] && V3.avatar.b[FEAT_BONE[keys[i]]];
@@ -893,6 +1037,7 @@ const HERO = { L:null, t:0 };
 /* ================= LEARN ================= */
 const LA = { t:0, playing:true, speed:1, all:false };
 function renderLearn(){
+  { const Ls = lessonById(S.lessonId); V3.hands = (Ls.steps[S.step] || {}).hand || null; }
   const L = lessonById(S.lessonId); fillLessonSelects();
   $('#learnLevel').textContent = `${L.level} · ${L.steps.length} bước`;
   $('#learnTitle').textContent = L.name; $('#learnDesc').textContent = L.desc;
@@ -970,6 +1115,9 @@ function updateRefInfo(i){
   $('#refHan').textContent = s.han; $('#refName').textContent = s.name;
   $('#refIdx').textContent = `Bước ${i+1} / ${L.steps.length}`;
   $('#refCues').innerHTML = s.cue.map(c => `<li>${esc(c)}</li>`).join('');
+  const rh = $('#refHand'); rh.hidden = !s.hand;
+  if(s.hand) rh.innerHTML = '✋ Thủ hình: ' + ['l','r'].filter(k => s.hand[k]).map(k => `tay ${SIDE[k]} <b>${SHAPES[s.hand[k]].name}</b>`).join(' · ');
+  V3.hands = s.hand || null;
 }
 function setStep(i){
   const L = lessonById(S.lessonId);
@@ -991,6 +1139,10 @@ $('#modeSeg').addEventListener('click', e => {
 $('#optVoice').onchange = e => { S.voice = e.target.checked; if(!S.voice) try{ speechSynthesis.cancel(); }catch(_){} };
 $('#optGhost').onchange = e => { S.ghost = e.target.checked; };
 $('#optSkel').onchange = e => { S.showSkel = e.target.checked; };
+S.outline = lsGet('kj-outline', 'parts'); $('#optOutline').value = S.outline;
+$('#optOutline').onchange = e => { S.outline = e.target.value; lsSet('kj-outline', S.outline); };
+S.fingers = lsGet('kj-fingers', '0') === '1'; $('#optFingers').checked = S.fingers;
+$('#optFingers').onchange = e => { S.fingers = e.target.checked; lsSet('kj-fingers', S.fingers ? '1' : '0'); if(S.fingers) ensureHands().then(() => toast('Đã bật theo dõi ngón tay')).catch(() => {}); };
 $('#optAuto').onchange = e => { S.autoNext = e.target.checked; };
 S.zone = lsGet('kj-zone', 'auto'); $('#optZone').value = S.zone;
 $('#optZone').onchange = e => { S.zone = e.target.value; P.zone = null; lsSet('kj-zone', S.zone); toast(S.zone === 'auto' ? 'Tự chọn vùng chấm theo khung hình' : 'Chỉ chấm ' + ZONES[S.zone].name.toLowerCase()); };
@@ -1079,9 +1231,43 @@ function sizeOverlay(cv, video){
 }
 const STATE_RGB = { good:[95,185,133], warn:[232,163,61], bad:[236,91,69], idle:[217,165,74] };
 /* Student overlay: glowing body contour coloured by state, small pulsing rings on joints that are off. */
+/* Outline drawn per body part (head, torso, upper arm, forearm, thigh, shin) so limbs never merge into one blob. */
+const PARTS = [
+  { a:'ls', b:'le', feat:'lShoulder', r:.13 }, { a:'le', b:'lw', feat:'lElbow', r:.11 },
+  { a:'rs', b:'re', feat:'rShoulder', r:.13 }, { a:'re', b:'rw', feat:'rElbow', r:.11 },
+  { a:'lh', b:'lk', feat:'lHip', r:.19 },      { a:'lk', b:'la', feat:'lKnee', r:.14 },
+  { a:'rh', b:'rk', feat:'rHip', r:.19 },      { a:'rk', b:'ra', feat:'rKnee', r:.14 },
+];
+function capsule(ctx, x1, y1, x2, y2, r){
+  const t = Math.atan2(y2 - y1, x2 - x1);
+  ctx.beginPath(); ctx.arc(x1, y1, r, t + Math.PI/2, t - Math.PI/2); ctx.arc(x2, y2, r, t - Math.PI/2, t + Math.PI/2); ctx.closePath();
+}
+function drawParts(ctx, H, user, state, colors){
+  const u = torsoLen(user) * H, base = `rgb(${STATE_RGB[state].join(',')})`, lw = Math.max(2.5, H/260);
+  const px = k => [g(user,k)[0]*H, g(user,k)[1]*H];
+  const paint = (col, path) => {
+    ctx.save(); path(); ctx.fillStyle = col; ctx.globalAlpha = .13; ctx.fill(); ctx.globalAlpha = 1;
+    ctx.strokeStyle = col; ctx.lineWidth = lw; ctx.lineJoin = 'round'; ctx.shadowColor = col; ctx.shadowBlur = 8; ctx.stroke(); ctx.restore();
+  };
+  if(['ls','rs','lh','rh'].every(k => vis(user,k))){
+    const [a, b, c, d] = ['ls','rs','rh','lh'].map(px), cx = (a[0]+b[0]+c[0]+d[0])/4, cy = (a[1]+b[1]+c[1]+d[1])/4;
+    const out = p => [cx + (p[0]-cx)*1.12, cy + (p[1]-cy)*1.06];
+    paint(colors.torso || base, () => { ctx.beginPath(); [a, b, c, d].map(out).forEach((p, i) => i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1])); ctx.closePath(); });
+  }
+  if(vis(user,'nose')){ const n = px('nose'); paint(base, () => { ctx.beginPath(); ctx.arc(n[0], n[1] - u*.05, u*.28, 0, 7); }); }
+  PARTS.forEach(p => {
+    if(!vis(user,p.a) || !vis(user,p.b)) return;
+    const [x1, y1] = px(p.a), [x2, y2] = px(p.b);
+    paint(colors[p.feat] || base, () => capsule(ctx, x1, y1, x2, y2, u*p.r));
+  });
+}
 function drawUserOverlay(ctx, H, user, state, items){
-  const W = ctx.canvas.width, outlined = drawOutline(ctx, W, H, STATE_RGB[state]);
-  const colors = {}; (items || []).forEach(it => colors[it.f.id] = ndColor(it.nd));
+  const W = ctx.canvas.width;
+  const colors = {}; (items || []).forEach(it => { if(it.f.kind !== 'hand') colors[it.f.id] = ndColor(it.nd); });
+  let outlined = false;
+  if(S.outline === 'silhouette') outlined = drawOutline(ctx, W, H, STATE_RGB[state]);
+  else { drawParts(ctx, H, user, state, colors); outlined = true; }
+  drawHands(ctx, H, lessonById(S.lessonId).steps[S.mode === 'single' ? S.step : Math.max(0, P.guideStep)]);
   if(!outlined || S.showSkel){
     const hip = mid(g(user,'lh'), g(user,'rh')), unit = torsoLen(user)*H;
     drawFigure(ctx, user, { cx:hip[0]*H, hipY:hip[1]*H, unit, mirror:false, anchor:'hip', style:'skeleton', colors, color: outlined ? null : COL.gold });
@@ -1285,6 +1471,8 @@ function practiceTick(now, dt){
   if(video.currentTime === P.lastVT && P.state!=='running'){ return; }
   P.lastVT = video.currentTime;
   const pose = detectPose(video);
+  const curStep = L.steps[S.mode === 'single' ? S.step : (P.guideStep >= 0 ? P.guideStep : 0)];
+  if(handsWanted(curStep)){ if(handLm) detectHands(video, pose); else ensureHands().catch(() => {}); }
   const H = video.videoHeight, ctx = sizeOverlay($('#pcanvas'), video);
   const detDt = P.lastDetect ? Math.min(0.2, (now - P.lastDetect)/1000) : 0; P.lastDetect = now;
 
@@ -1307,20 +1495,37 @@ function showZone(zone, share){
 }
 function singleUpdate(L, pose, ctx, H, now, dt){
   const step = L.steps[S.step], zone = currentZone(pose, dt), share = zoneShare(step, zone);
-  const issue = framingIssue(pose, zone) || (pose && share < .35 ? `Thức này cần thấy cả ${zone === 'upper' ? 'chân' : 'tay'}: lùi xa hơn hoặc chọn "Toàn thân".` : null);
+  // close-up of the hands only (no body in view): score the fingers alone
+  const handsSeen = !!step.hand && !!handLm && ['l','r'].some(k => HANDS[k] && now - HANDS[k].at < 1200);
+  // hand-form steps can be done up close: if the body is barely in view, judge the fingers alone
+  const handOnly = handsSeen && (!pose || ((step.handW ?? .35) >= .6 && comparePose(pose, step, zone).coverage < .6));
+  const issue = handOnly ? null : framingIssue(pose, zone) || (pose && share < .35 ? `Thức này cần thấy cả ${zone === 'upper' ? 'chân' : 'tay'}: lùi xa hơn hoặc chọn "Toàn thân".` : null);
   if(now - (P.zoneUI || 0) > 300){ P.zoneUI = now; showZone(zone, share); }
   const video = $('#pvideo');
-  if(!pose){ renderHand(video, null, false, null, dt); $('#coachTag').hidden = true; setBanner('#pBanner', issue); P.hold = Math.max(0, P.hold - dt*2); updateHold(); if(now-P.lastUI>250){ setScoreUI(0,'Không thấy người',''); setFixes([], issue); P.lastUI=now; } return; }
-  const r = comparePose(pose, step, zone);
+  if(!pose && !handOnly){ renderHand(video, null, false, null, dt); $('#coachTag').hidden = true; setBanner('#pBanner', issue); P.hold = Math.max(0, P.hold - dt*2); updateHold(); if(now-P.lastUI>250){ setScoreUI(0,'Không thấy người',''); setFixes([], issue); P.lastUI=now; } return; }
+  const r = handOnly ? { score:0, coverage:1, items:[], wrongSide:false } : comparePose(pose, step, zone);
+  let handMiss = null;
+  if(handOnly){
+    const hi = handItems(step); r.score = hi.score; r.items = hi.items;
+    if(hi.missing.length) handMiss = `Đưa cả bàn tay ${hi.missing.map(k => SIDE[k]).join(' và ')} vào khung hình`;
+  } else if(step.hand){
+    if(!handLm){ if((step.handW ?? .35) >= .5) handMiss = 'Đang tải mô hình bàn tay…'; }
+    else {
+      const hi = handItems(step), hw = step.handW ?? .35;
+      // full-body steps: hands are small from afar, so the fingers only count when the camera can read them
+      if(!hi.missing.length){ r.score = r.score*(1 - hw) + hi.score*hw; r.items = r.items.concat(hi.items); }
+      else if(hw >= .5) handMiss = 'Đưa bàn tay vào khung hình, gần camera hơn để chấm ngón tay';
+    }
+  }
   P.score = P.score*0.7 + r.score*0.3;
   const errs = errorsOf(r.items);
-  const passing = !issue && r.coverage >= 0.6 && P.score >= PASS && !errs.some(e => e.wt>=1 && e.nd>1.5);
+  const passing = !issue && !handMiss && r.coverage >= 0.6 && P.score >= PASS && !errs.some(e => e.wt>=1 && e.nd>1.5);
   const state = P.passed || passing ? 'good' : P.score >= 60 ? 'warn' : 'bad';
   // ghost master appears only while the pose is wrong and keeps guiding for a moment
   P.wrongFor = passing || P.passed ? 0 : (P.wrongFor || 0) + dt;
-  drawUserOverlay(ctx, H, pose, state, r.items);
+  if(handOnly) drawHands(ctx, H, step); else drawUserOverlay(ctx, H, pose, state, r.items);
   guide(ctx, video, pose, errs, L.world3[step.frame], S.ghost && P.wrongFor > 1.5, dt);
-  setBanner('#pBanner', issue || (r.coverage < 0.6 ? 'Camera chưa thấy đủ các khớp quan trọng.' : r.wrongSide ? 'Ngược bên: làm giống hình trong gương' : null));
+  setBanner('#pBanner', issue || handMiss || (r.coverage < 0.6 ? 'Camera chưa thấy đủ các khớp quan trọng.' : r.wrongSide ? 'Ngược bên: làm giống hình trong gương' : null));
   if(!P.passed){
     P.hold = passing ? P.hold + dt : Math.max(0, P.hold - dt*1.5);
     P.bestHold = Math.max(P.bestHold || 0, P.hold);
@@ -1345,7 +1550,7 @@ function singleUpdate(L, pose, ctx, H, now, dt){
     P.lastUI = now;
     const verdict = P.passed ? 'Đạt' : passing ? 'Giữ nguyên…' : P.score >= 60 ? 'Gần đúng' : 'Chưa khớp';
     setScoreUI(P.score, r.wrongSide ? 'Ngược bên' : verdict, P.passed||passing ? 'good' : P.score>=60 ? 'warn' : 'bad');
-    setFixes(errs, issue || (r.wrongSide ? wrongSideMsg(step) : null));
+    setFixes(errs, issue || handMiss || (r.coverage < 0.6 ? 'Camera chưa thấy đủ người. Lùi ra hoặc chỉnh máy để thấy vai, tay và hông.' : null) || (r.wrongSide ? wrongSideMsg(step) : null));
   }
   if(!P.passed && !issue && now - P.lastSpeak > 3500){
     if(r.wrongSide){ const msg = wrongSideMsg(step); if(msg !== P.lastMsg || now - P.lastSpeak > 8000){ say(msg); P.lastMsg = msg; P.lastSpeak = now; } }
@@ -1642,6 +1847,7 @@ $('#edAdd').onclick = () => {
 function renderEdSteps(){
   $('#edSteps').innerHTML = ST.steps.map((s,i) => `<li><b style="color:var(--gold);font-family:var(--f-display);font-size:18px">${i+1}</b>
     <div class="grow"><input type="text" data-name="${i}" value="${esc(s.name)}" aria-label="Tên bước ${i+1}"><small>Khung ${s.frame} · ${(s.frame/FPS).toFixed(1)} s${s.cue ? ' · ' + esc(s.cue) : ''}</small></div>
+    <div class="ed-hand">${['l','r'].map(k => `<label>Tay ${SIDE[k]}<select data-hand="${i}" data-side="${k}"><option value="">Không chấm</option>${Object.entries(SHAPES).map(([id, sh]) => `<option value="${id}" ${s.hand && s.hand[k] === id ? 'selected' : ''}>${sh.name}</option>`).join('')}</select></label>`).join('')}</div>
     <button class="btn small ghost" data-jump="${i}">Xem</button><button class="btn small ghost" data-rm="${i}">Bỏ</button></li>`).join('')
     || '<li class="muted">Chưa có bước nào.</li>';
   ST.dirty = true;
@@ -1652,6 +1858,12 @@ $('#edSteps').addEventListener('click', e => {
   if(r){ ST.steps.splice(+r.dataset.rm, 1); renderEdSteps(); }
 });
 $('#edSteps').addEventListener('input', e => { const i = e.target.dataset.name; if(i!=null) ST.steps[+i].name = e.target.value; });
+$('#edSteps').addEventListener('change', e => {
+  const i = e.target.dataset.hand; if(i == null) return;
+  const st = ST.steps[+i], h = { ...(st.hand || {}) };
+  if(e.target.value) h[e.target.dataset.side] = e.target.value; else delete h[e.target.dataset.side];
+  st.hand = Object.keys(h).length ? h : undefined; ST.dirty = true;
+});
 $('#edSuggest').onclick = () => {
   if(ST.frames.length < 10){ toast('Cần ít nhất 1 giây dữ liệu.'); return; }
   const F = ST.frames.map(features), n = F.length, motion = new Array(n).fill(0);
@@ -1667,7 +1879,7 @@ $('#edSuggest').onclick = () => {
 function currentDef(){
   const name = $('#sName').value.trim();
   return { id: ST.editId || ('c-' + Date.now()), custom:true, han:'自創', name, level: $('#sLevel').value, desc: $('#sDesc').value.trim(),
-    frames: ST.frames.map(enc), world: ST.world.map(w => w ? w.flatMap(q => q.map(v => +v.toFixed(3))) : null), steps: ST.steps.map(s => ({ name:s.name, cue:s.cue, frame:s.frame })) };
+    frames: ST.frames.map(enc), world: ST.world.map(w => w ? w.flatMap(q => q.map(v => +v.toFixed(3))) : null), steps: ST.steps.map(s => ({ name:s.name, cue:s.cue, frame:s.frame, ...(s.hand ? { hand:s.hand, handW:.35 } : {}) })) };
 }
 $('#edSave').onclick = async () => {
   if(!ST.frames.length){ toast('Chưa có dữ liệu để lưu.'); return; }

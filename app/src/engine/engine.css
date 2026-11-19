@@ -289,3 +289,5 @@ textarea{resize:vertical;min-height:64px}
 .opt-row input[type=range]{flex:1}
 .in-room .far-btn{display:none}
 .stage.far .banner{display:none!important}
+.ref-hand{margin:0 0 8px;font-size:14px;color:var(--paper-dim)} .ref-hand b{color:var(--gold)}
+.ed-hand{display:flex;gap:8px;flex-wrap:wrap;margin-top:4px}.ed-hand label{display:flex;flex-direction:column;font-size:12px;color:var(--paper-dim);gap:2px}.ed-hand select{font-size:13px;padding:4px 6px}

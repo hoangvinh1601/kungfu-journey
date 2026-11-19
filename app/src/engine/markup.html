@@ -65,6 +65,7 @@
       <div class="ref-label"><span class="han" id="refHan"></span><div><b id="refName"></b><small id="refIdx"></small></div></div>
       <div class="v3d ref-stage" id="refStage" data-bar="compact"><canvas id="refCanvas" class="fallback2d"></canvas></div>
       <div>
+        <p class="ref-hand" id="refHand" hidden></p>
         <ul class="cues" id="refCues"></ul>
         <div class="row" style="margin-top:10px"><button class="btn small ghost" id="stepPrev">‹ Bước trước</button><button class="btn small ghost" id="stepNext">Bước sau ›</button></div>
       </div>
@@ -114,6 +115,9 @@
           <label><input type="checkbox" id="optVoice" checked> Nhắc lỗi bằng giọng nói</label>
           <label><input type="checkbox" id="optGhost" checked> Bàn tay 3D hướng dẫn khi sai</label>
           <label><input type="checkbox" id="optSkel"> Hiện khung xương (kỹ thuật)</label>
+          <label><input type="checkbox" id="optFingers"> Luôn theo dõi ngón tay (tải thêm khoảng 8 MB)</label>
+          <label class="opt-row">Kiểu viền cơ thể
+            <select id="optOutline"><option value="parts">Theo từng bộ phận</option><option value="silhouette">Bóng người liền</option></select></label>
           <label><input type="checkbox" id="optAuto" checked> Đạt thì tự chuyển bước</label>
           <label class="opt-row">Vùng chấm điểm
             <select id="optZone">
