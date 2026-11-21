@@ -334,7 +334,7 @@ async function ensureModel(){
     const { PoseLandmarker, FilesetResolver } = await import('@mediapipe/tasks-vision');
     const fileset = mpFileset = mpFileset || await FilesetResolver.forVisionTasks(`${MP_URL}/wasm`);
     const opts = delegate => ({ baseOptions:{ modelAssetPath: MODEL_URLS[S.model], delegate }, runningMode:'VIDEO', numPoses:1,
-      minPoseDetectionConfidence:.5, minPosePresenceConfidence:.5, minTrackingConfidence:.5, outputSegmentationMasks:true });
+      minPoseDetectionConfidence:.4, minPosePresenceConfidence:.4, minTrackingConfidence:.5, outputSegmentationMasks:true });
     if(landmarker){ try{ landmarker.close(); }catch(e){} landmarker = null; }
     try{ landmarker = await PoseLandmarker.createFromOptions(fileset, opts('GPU')); }
     catch(e){ console.warn('GPU không khả dụng, chuyển sang CPU', e); landmarker = await PoseLandmarker.createFromOptions(fileset, opts('CPU')); }
@@ -466,8 +466,9 @@ resetFilters();
 
 /* Body silhouette from the pose model's segmentation mask, kept on a small smoothed grid */
 const SEG = { gw:0, gh:0, grid:null, valid:false, img:null, cv:null };
-function updateSeg(mask){
-  const mw = mask.width, mh = mask.height, data = mask.getAsFloat32Array();
+const PAD = { on:false, cv:null, ctx:null };
+function updateSeg(mask, crop = [0, 0, 1, 1]){
+  const mw = mask.width, mh = mask.height, data = mask.getAsFloat32Array(), [cx0, cy0, cx1, cy1] = crop;
   const gw = 224, gh = Math.max(1, Math.round(gw*mh/mw));
   if(SEG.gw !== gw || SEG.gh !== gh){
     SEG.gw = gw; SEG.gh = gh; SEG.grid = new Float32Array(gw*gh); SEG.valid = false;
@@ -475,8 +476,8 @@ function updateSeg(mask){
   }
   const G = SEG.grid, keep = SEG.valid ? 0.55 : 0;
   for(let y=0;y<gh;y++){
-    const row = Math.min(mh-1, Math.floor((y+.5)*mh/gh))*mw;
-    for(let x=0;x<gw;x++){ const i = y*gw+x; G[i] = G[i]*keep + data[row + Math.min(mw-1, Math.floor((x+.5)*mw/gw))]*(1-keep); }
+    const row = Math.min(mh-1, Math.floor((cy0 + (y+.5)/gh*(cy1-cy0))*mh))*mw;
+    for(let x=0;x<gw;x++){ const i = y*gw+x; G[i] = G[i]*keep + data[row + Math.min(mw-1, Math.floor((cx0 + (x+.5)/gw*(cx1-cx0))*mw))]*(1-keep); }
   }
   SEG.valid = true;
 }
@@ -556,11 +557,27 @@ function drawMaskParts(ctx, W, H, user, colors, calm){
 function detectPose(video){
   if(!landmarker || video.readyState < 2 || !video.videoWidth) return null;
   let ts = performance.now(); if(ts <= lastTs) ts = lastTs + 1; lastTs = ts;
-  let res; try{ res = landmarker.detectForVideo(video, ts); }catch(e){ console.warn(e); return null; }
+  // Close-up rescue: the detector looks for a face first and fails when the head is cut by the frame edge.
+  // After a few misses, feed the frame with empty margins around it so a cut head is no longer on the border.
+  const W0 = video.videoWidth, H0 = video.videoHeight;
+  let input = video, crop = [0, 0, 1, 1];
+  if(PAD.on){
+    const pw = Math.round(W0*.18), pt = Math.round(H0*.35), cw = W0 + 2*pw, ch = H0 + pt;
+    if(!PAD.cv){ PAD.cv = document.createElement('canvas'); PAD.ctx = PAD.cv.getContext('2d'); }
+    if(PAD.cv.width !== cw || PAD.cv.height !== ch){ PAD.cv.width = cw; PAD.cv.height = ch; }
+    PAD.ctx.fillStyle = '#808080'; PAD.ctx.fillRect(0, 0, cw, ch); PAD.ctx.drawImage(video, pw, pt, W0, H0);
+    input = PAD.cv; crop = [pw/cw, pt/ch, (pw + W0)/cw, 1];
+  }
+  let res; try{ res = landmarker.detectForVideo(input, ts); }catch(e){ console.warn(e); return null; }
   const segM = res && res.segmentationMasks && res.segmentationMasks[0];
-  if(segM){ try{ updateSeg(segM); }catch(e){ SEG.valid = false; } try{ segM.close(); }catch(e){} }
-  const lm = res && res.landmarks && res.landmarks[0];
-  if(!lm){ lastWorld = null; SEG.valid = false; if(++missCount > 15) resetFilters(); return null; }
+  if(segM){ try{ updateSeg(segM, crop); }catch(e){ SEG.valid = false; } try{ segM.close(); }catch(e){} }
+  let lm = res && res.landmarks && res.landmarks[0];
+  if(lm && PAD.on){ const [x0, y0, x1, y1] = crop; lm = lm.map(q => ({ ...q, x:(q.x - x0)/(x1 - x0), y:(q.y - y0)/(y1 - y0) })); }
+  if(!lm){
+    lastWorld = null; SEG.valid = false; if(++missCount > 15) resetFilters();
+    if(missCount % 12 === 0){ PAD.on = !PAD.on; resetFilters(); }      // try the other way
+    return null;
+  }
   missCount = 0;
   const wl = res.worldLandmarks && res.worldLandmarks[0];
   lastWorld = wl ? MP_IDX.map((mi,k) => [wfilters[k][0].f(wl[mi].x, ts), wfilters[k][1].f(wl[mi].y, ts), wfilters[k][2].f(wl[mi].z, ts)]) : null;
