@@ -129,7 +129,7 @@ function seenZone(pose){
   if(!pose) return 'full';
   const feet = vis(pose,'la') || vis(pose,'ra'), head = vis(pose,'nose'), sh = vis(pose,'ls') && vis(pose,'rs'), hips = vis(pose,'lh') && vis(pose,'rh');
   if(feet && head) return 'full';
-  if(!feet && head && sh) return 'upper';
+  if(!feet && head) return 'upper';
   if(feet && hips && !head) return 'lower';
   return 'full';
 }
@@ -1191,7 +1191,7 @@ function setFixes(errs, extra){
   $('#farTip').textContent = extra || (errs.length ? advice(errs[0]) : 'Đúng rồi, giữ nguyên');
   if(extra){ el.innerHTML = `<li class="warn">${esc(extra)}</li>`; return; }
   if(!errs.length){ el.innerHTML = `<li class="good">Tư thế khớp với mẫu. Giữ nguyên.</li>`; return; }
-  el.innerHTML = errs.slice(0,4).map(it => `<li class="${it.nd>1.6?'bad':'warn'}"><span>${esc(advice(it))}
+  el.innerHTML = errs.slice(0,2).map(it => `<li class="${it.nd>1.6?'bad':'warn'}"><span>${esc(advice(it))}
     <small>${esc(it.f.label)}: bạn ${fmtFeat(it.f,it.u)}, mẫu ${fmtFeat(it.f,it.r)}</small></span></li>`).join('');
 }
 function framingIssue(pose, zone = 'full'){
@@ -1243,7 +1243,7 @@ function capsule(ctx, x1, y1, x2, y2, r){
   ctx.beginPath(); ctx.arc(x1, y1, r, t + Math.PI/2, t - Math.PI/2); ctx.arc(x2, y2, r, t - Math.PI/2, t + Math.PI/2); ctx.closePath();
 }
 function drawParts(ctx, H, user, state, colors){
-  const u = torsoLen(user) * H, base = `rgb(${STATE_RGB[state].join(',')})`, lw = Math.max(2.5, H/260);
+  const u = torsoLen(user) * H, base = state === 'good' ? COL.good : 'rgba(241,230,207,.7)', lw = Math.max(2.5, H/260);
   const px = k => [g(user,k)[0]*H, g(user,k)[1]*H];
   const paint = (col, path) => {
     ctx.save(); path(); ctx.fillStyle = col; ctx.globalAlpha = .13; ctx.fill(); ctx.globalAlpha = 1;
@@ -1254,7 +1254,7 @@ function drawParts(ctx, H, user, state, colors){
     const out = p => [cx + (p[0]-cx)*1.12, cy + (p[1]-cy)*1.06];
     paint(colors.torso || base, () => { ctx.beginPath(); [a, b, c, d].map(out).forEach((p, i) => i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1])); ctx.closePath(); });
   }
-  if(vis(user,'nose')){ const n = px('nose'); paint(base, () => { ctx.beginPath(); ctx.arc(n[0], n[1] - u*.05, u*.28, 0, 7); }); }
+  if(vis(user,'nose') && vis(user,'ls') && vis(user,'rs')){ const n = px('nose'), sw = dist(px('ls'), px('rs')); paint(base, () => { ctx.beginPath(); ctx.arc(n[0], n[1] - u*.05, Math.min(u*.28, sw*.42), 0, 7); }); }
   PARTS.forEach(p => {
     if(!vis(user,p.a) || !vis(user,p.b)) return;
     const [x1, y1] = px(p.a), [x2, y2] = px(p.b);
@@ -1263,7 +1263,15 @@ function drawParts(ctx, H, user, state, colors){
 }
 function drawUserOverlay(ctx, H, user, state, items){
   const W = ctx.canvas.width;
-  const colors = {}; (items || []).forEach(it => { if(it.f.kind !== 'hand') colors[it.f.id] = ndColor(it.nd); });
+  // only the limb being fixed is coloured as wrong; other parts stay calm so the screen doesn't light up everywhere
+  const bad = (items || []).filter(it => it.f.kind !== 'hand' && it.nd > 1 && it.wt >= .5).sort((x, y) => y.nd*y.wt - x.nd*x.wt);
+  const focusLimbs = GG.alpha > .3 && GG.limb ? [GG.limb] : bad.length ? (FEAT_LIMB[bad[0].f.id] || ['torso']) : [];
+  const calm = 'rgba(241,230,207,.7)';
+  const colors = {}; (items || []).forEach(it => {
+    if(it.f.kind === 'hand') return;
+    if(it.nd <= 1) colors[it.f.id] = COL.good;
+    else colors[it.f.id] = (FEAT_LIMB[it.f.id] || ['torso']).some(l => focusLimbs.includes(l)) ? ndColor(it.nd) : calm;
+  });
   let outlined = false;
   if(S.outline === 'silhouette') outlined = drawOutline(ctx, W, H, STATE_RGB[state]);
   else { drawParts(ctx, H, user, state, colors); outlined = true; }
@@ -1272,13 +1280,6 @@ function drawUserOverlay(ctx, H, user, state, items){
     const hip = mid(g(user,'lh'), g(user,'rh')), unit = torsoLen(user)*H;
     drawFigure(ctx, user, { cx:hip[0]*H, hipY:hip[1]*H, unit, mirror:false, anchor:'hip', style:'skeleton', colors, color: outlined ? null : COL.gold });
   }
-  const pulse = 1 + 0.25*Math.sin(performance.now()/180);
-  (items || []).filter(it => it.nd > 1 && it.wt >= .5 && it.f.pts.length === 3).forEach(it => {
-    const q = g(user, it.f.pts[1]); if(q[2] < VIS) return;
-    ctx.save(); ctx.strokeStyle = it.nd > 1.6 ? COL.bad : COL.warn; ctx.lineWidth = Math.max(3, H/180);
-    ctx.shadowColor = ctx.strokeStyle; ctx.shadowBlur = 10;
-    ctx.beginPath(); ctx.arc(q[0]*H, q[1]*H, H/38*pulse, 0, 7); ctx.stroke(); ctx.restore();
-  });
 }
 
 /* ---- 3D ghost master: translucent avatar laid over the student, guiding the wrong limbs ---- */
@@ -1423,32 +1424,66 @@ function drawTargets(ctx, targets, H, focus){
   }
   ctx.restore();
 }
-/* One frame of guidance: green targets for every wrong limb, the coach carries the worst one. */
+/* Guidance: ONE wrong limb at a time. A green "ghost" of that limb shows where it should be,
+   and a soft arrow flows from the student's hand/foot into it. Everything is smoothed. */
+const GG = { alpha:0, limb:null, pts:null, t:0 };
+const LIMB_NAME = { lArm:'tay trái', rArm:'tay phải', lLeg:'chân trái', rLeg:'chân phải' };
 function guide(ctx, video, user2, errs, target3, show, dt){
-  const H = video.videoHeight, limbs = limbsFor(errs), tag = $('#coachTag');
-  if(!show || !user2 || !V3.ok || !target3){ renderHand(video, user2, false, null, dt); tag.hidden = true; GH.why = !V3.ok ? '3d-not-ready' : !user2 ? 'no-person' : 'hidden'; return; }
-  let contact = null, targets = [], focus = null;
-  if(lastWorld && limbs.length){
-    targets = guideTargets(user2, lastWorld.map(q => [q[0], -q[1], -q[2]]), target3, limbs, H);
-    // carry the most important wrong limb the camera can see: hand -> wrist for arms, knee/ankle for legs
-    const order = [...new Set(errs.flatMap(e => FEAT_LIMB[e.f.id] || []))];
+  const H = video.videoHeight, tag = $('#coachTag');
+  let want = null;
+  if(show && user2 && target3 && lastWorld){
+    const limbs = limbsFor(errs);
+    const order = [...new Set(errs.filter(e => e.nd > 1).flatMap(e => FEAT_LIMB[e.f.id] || []))];
+    // stay on the same limb while it is still wrong, so the cue doesn't jump around
+    if(GG.limb && order.includes(GG.limb)) order.unshift(GG.limb);
+    const tg = limbs.length ? guideTargets(user2, lastWorld.map(q => [q[0], -q[1], -q[2]]), target3, limbs, H) : [];
     for(const l of order){
-      const w = targets.find(t => t.limb === l); if(!w) continue;
-      const opts = /Arm/.test(l) ? [w.tip, w.mid] : [w.mid, w.tip];
-      const c = opts.find(o => o.ok && Math.hypot(o.to[0]-o.from[0], o.to[1]-o.from[1]) > H*.03);
-      if(c){ contact = c; focus = l; break; }
+      const t = tg.find(x => x.limb === l); if(!t) continue;
+      const root = g(user2, LIMB_ROOT[l]); if(root[2] < VIS || !t.mid.ok) continue;
+      const far = Math.hypot(t.tip.to[0]-t.tip.from[0], t.tip.to[1]-t.tip.from[1]) > H*.04 || Math.hypot(t.mid.to[0]-t.mid.from[0], t.mid.to[1]-t.mid.from[1]) > H*.04;
+      if(!far) continue;
+      want = { limb:l, root:[root[0]*H, root[1]*H], mid:t.mid.to, tip:t.tip.to, from:t.tip.ok ? t.tip.from : t.mid.from }; break;
     }
   }
-  renderHand(video, user2, true, contact, dt);
-  drawTargets(ctx, targets, H, focus);
-  GH.why = !GH.ok ? 'hand-loading' : contact ? 'guiding:' + focus : 'no-visible-limb';
-  tag.hidden = !(GH.ok && contact && GH.opacity > .15) && !(targets.length && !contact);
-  tag.textContent = contact ? 'Theo bàn tay: đưa ' + (/Arm/.test(focus) ? 'tay' : 'chân') + ' tới điểm xanh' : 'Chỉnh theo điểm xanh và hình mẫu bên trái';
-  if(GH.handNow && GH.handA > .2){   // soft light under the guiding hand
-    const [hx, hy] = GH.handNow, R = H/14, gr = ctx.createRadialGradient(hx, hy, 0, hx, hy, R);
-    gr.addColorStop(0, `rgba(255,226,160,${.45*GH.handA})`); gr.addColorStop(1, 'rgba(255,226,160,0)');
-    ctx.save(); ctx.fillStyle = gr; ctx.beginPath(); ctx.arc(hx, hy, R, 0, 7); ctx.fill(); ctx.restore();
+  GG.alpha += ((want ? 1 : 0) - GG.alpha) * Math.min(1, dt*5);
+  if(want){
+    if(GG.limb !== want.limb || !GG.pts){ GG.limb = want.limb; GG.pts = { root:want.root, mid:want.mid, tip:want.tip, from:want.from }; GG.t = 0; }
+    const k = Math.min(1, dt*7);      // glide toward the new positions, no jitter
+    for(const key of ['root','mid','tip','from']) GG.pts[key] = [GG.pts[key][0] + (want[key][0]-GG.pts[key][0])*k, GG.pts[key][1] + (want[key][1]-GG.pts[key][1])*k];
   }
+  tag.hidden = !(want && GG.alpha > .3);
+  if(want) tag.textContent = `Đưa ${LIMB_NAME[want.limb]} vào bóng xanh`;
+  if(GG.alpha < .02 || !GG.pts) return false;
+  GG.t += dt;
+  const a = GG.alpha, { root, mid, tip, from } = GG.pts, u = Math.max(H*.02, dist(root, mid)*.16), arm = /Arm/.test(GG.limb);
+  const breathe = .75 + .25*Math.sin(GG.t*3);
+  ctx.save(); ctx.globalAlpha = a; ctx.lineJoin = 'round';
+  // ghost limb
+  const seg = (p, q, r) => { capsule(ctx, p[0], p[1], q[0], q[1], r); };
+  ctx.shadowColor = '#5fd68c'; ctx.shadowBlur = 22;
+  ctx.fillStyle = `rgba(95,214,140,${.3*breathe})`; ctx.strokeStyle = `rgba(190,255,215,${breathe})`; ctx.lineWidth = Math.max(3, H/170);
+  seg(root, mid, u*(arm ? 1.35 : 1.6)); ctx.fill(); ctx.stroke();
+  seg(mid, tip, u*(arm ? 1.15 : 1.35)); ctx.fill(); ctx.stroke();
+  // target: hand / foot spot
+  ctx.beginPath(); ctx.arc(tip[0], tip[1], u*1.15*(1 + .12*Math.sin(GG.t*5)), 0, 7); ctx.fillStyle = 'rgba(95,214,140,.85)'; ctx.fill();
+  // flowing arrow from the current hand/foot to the target
+  const dx = tip[0]-from[0], dy = tip[1]-from[1], L = Math.hypot(dx, dy);
+  if(L > H*.05){
+    const nx = -dy/L, ny = dx/L, bend = Math.min(L*.18, H*.06);
+    const c = [(from[0]+tip[0])/2 + nx*bend, (from[1]+tip[1])/2 + ny*bend];
+    const at = t => [(1-t)*(1-t)*from[0] + 2*(1-t)*t*c[0] + t*t*tip[0], (1-t)*(1-t)*from[1] + 2*(1-t)*t*c[1] + t*t*tip[1]];
+    ctx.shadowBlur = 12; ctx.strokeStyle = 'rgba(255,255,255,.35)'; ctx.lineWidth = Math.max(2, H/300); ctx.setLineDash([H/80, H/60]); ctx.lineDashOffset = -GG.t*H/12;
+    ctx.beginPath(); ctx.moveTo(from[0], from[1]); ctx.quadraticCurveTo(c[0], c[1], tip[0]*.97 + from[0]*.03, tip[1]*.97 + from[1]*.03); ctx.stroke(); ctx.setLineDash([]);
+    for(let i = 0; i < 3; i++){                       // three chevrons gliding along the curve
+      const t = ((GG.t*.55 + i/3) % 1), p = at(t), q = at(Math.min(1, t + .02)), ang = Math.atan2(q[1]-p[1], q[0]-p[0]), sz = u*1.2;
+      const fade = Math.sin(t*Math.PI);
+      ctx.save(); ctx.globalAlpha = a*fade; ctx.translate(p[0], p[1]); ctx.rotate(ang);
+      ctx.strokeStyle = '#eafff1'; ctx.lineWidth = Math.max(3, H/160); ctx.lineCap = 'round';
+      ctx.beginPath(); ctx.moveTo(-sz*.6, -sz*.7); ctx.lineTo(sz*.3, 0); ctx.lineTo(-sz*.6, sz*.7); ctx.stroke(); ctx.restore();
+    }
+  }
+  ctx.restore();
+  return true;
 }
 
 function practiceTick(now, dt){
@@ -1465,7 +1500,6 @@ function practiceTick(now, dt){
     if(now >= P.countEnd + 500){ $('#pCount').hidden = true; P.state='running'; P.runStart = now; P.rec = []; P.zoneCount = {}; P.lastRec = 0; P.guideStep = -1; renderPractice(); }
   }
   if(!P.camOn) return;
-  if(V3.ok && S.ghost) ensureGhost();
   const video = $('#pvideo');
   if(video.readyState < 2 || !landmarker){ setBanner('#pBanner', landmarker ? 'Đang mở camera…' : 'Đang tải mô hình AI…'); return; }
   if(video.currentTime === P.lastVT && P.state!=='running'){ return; }
@@ -1502,7 +1536,7 @@ function singleUpdate(L, pose, ctx, H, now, dt){
   const issue = handOnly ? null : framingIssue(pose, zone) || (pose && share < .35 ? `Thức này cần thấy cả ${zone === 'upper' ? 'chân' : 'tay'}: lùi xa hơn hoặc chọn "Toàn thân".` : null);
   if(now - (P.zoneUI || 0) > 300){ P.zoneUI = now; showZone(zone, share); }
   const video = $('#pvideo');
-  if(!pose && !handOnly){ renderHand(video, null, false, null, dt); $('#coachTag').hidden = true; setBanner('#pBanner', issue); P.hold = Math.max(0, P.hold - dt*2); updateHold(); if(now-P.lastUI>250){ setScoreUI(0,'Không thấy người',''); setFixes([], issue); P.lastUI=now; } return; }
+  if(!pose && !handOnly){ GG.alpha = 0; $('#coachTag').hidden = true; setBanner('#pBanner', issue); P.hold = Math.max(0, P.hold - dt*2); updateHold(); if(now-P.lastUI>250){ setScoreUI(0,'Không thấy người',''); setFixes([], issue); P.lastUI=now; } return; }
   const r = handOnly ? { score:0, coverage:1, items:[], wrongSide:false } : comparePose(pose, step, zone);
   let handMiss = null;
   if(handOnly){
@@ -1524,8 +1558,12 @@ function singleUpdate(L, pose, ctx, H, now, dt){
   // ghost master appears only while the pose is wrong and keeps guiding for a moment
   P.wrongFor = passing || P.passed ? 0 : (P.wrongFor || 0) + dt;
   if(handOnly) drawHands(ctx, H, step); else drawUserOverlay(ctx, H, pose, state, r.items);
-  guide(ctx, video, pose, errs, L.world3[step.frame], S.ghost && P.wrongFor > 1.5, dt);
-  setBanner('#pBanner', issue || handMiss || (r.coverage < 0.6 ? 'Camera chưa thấy đủ các khớp quan trọng.' : r.wrongSide ? 'Ngược bên: làm giống hình trong gương' : null));
+  // one message at a time: framing problem > guide > short banner
+  const blocker = issue || handMiss || (r.coverage < 0.6 ? 'Lùi ra để camera thấy vai, tay và hông.' : null);
+  const guiding = !blocker && guide(ctx, video, pose, errs, L.world3[step.frame], S.ghost && P.wrongFor > 1.2, dt);
+  if(blocker || handOnly) guide(ctx, video, null, [], null, false, dt);
+  setBanner('#pBanner', blocker || (guiding ? null : r.wrongSide ? 'Ngược bên: làm giống hình trong gương' : null));
+  $('#holdBar').classList.toggle('dim', !!blocker);
   if(!P.passed){
     P.hold = passing ? P.hold + dt : Math.max(0, P.hold - dt*1.5);
     P.bestHold = Math.max(P.bestHold || 0, P.hold);
@@ -1550,7 +1588,8 @@ function singleUpdate(L, pose, ctx, H, now, dt){
     P.lastUI = now;
     const verdict = P.passed ? 'Đạt' : passing ? 'Giữ nguyên…' : P.score >= 60 ? 'Gần đúng' : 'Chưa khớp';
     setScoreUI(P.score, r.wrongSide ? 'Ngược bên' : verdict, P.passed||passing ? 'good' : P.score>=60 ? 'warn' : 'bad');
-    setFixes(errs, issue || handMiss || (r.coverage < 0.6 ? 'Camera chưa thấy đủ người. Lùi ra hoặc chỉnh máy để thấy vai, tay và hông.' : null) || (r.wrongSide ? wrongSideMsg(step) : null));
+    setFixes(errs, blocker || (r.wrongSide ? wrongSideMsg(step) : null));
+    if(blocker){ const fs = $('#farScore'); fs.textContent = '–'; fs.className = ''; }
   }
   if(!P.passed && !issue && now - P.lastSpeak > 3500){
     if(r.wrongSide){ const msg = wrongSideMsg(step); if(msg !== P.lastMsg || now - P.lastSpeak > 8000){ say(msg); P.lastMsg = msg; P.lastSpeak = now; } }
@@ -1640,7 +1679,7 @@ function fullUpdate(L, pose, ctx, H, now){
     setBanner('#pBanner', issue);
     if(f > L.seqEnd + 3*FPS*tempo()) finishFull();
   } else {
-    renderHand($('#pvideo'), null, false, null, .05); $('#coachTag').hidden = true;
+    GG.alpha = 0; $('#coachTag').hidden = true;
     if(pose) drawUserOverlay(ctx, H, pose, 'idle', []);
     setBanner('#pBanner', issue || (P.state==='idle' ? (root.classList.contains('in-room') ? 'Vào vị trí và chờ bắt đầu trận.' : 'Vào vị trí rồi bấm “Bắt đầu cả bài”.') : null));
     if(P.state==='idle' && now - P.lastUI > 300){ P.lastUI = now; setScoreUI(0, 'Chờ bắt đầu', ''); setFixes([], 'Chế độ cả bài: tập liền mạch theo hình mẫu bên trái. Ứng dụng tự căn nhịp (DTW) nên tập chậm hơn mẫu vẫn được chấm đúng.'); }

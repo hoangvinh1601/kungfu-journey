@@ -275,13 +275,13 @@ textarea{resize:vertical;min-height:64px}
 .far-hud{display:none}
 .stage.far{position:fixed;inset:0;z-index:80;height:100vh!important;border-radius:0;border:0}
 .stage.far .far-hud{display:flex;position:absolute;left:0;right:0;bottom:0;align-items:center;gap:3vw;padding:2vh 4vw;background:linear-gradient(transparent,rgba(13,10,9,.92) 40%);z-index:3}
-.far-hud b{font-family:var(--f-display);font-size:min(18vh,150px);line-height:1;min-width:2.2ch;text-align:center;font-variant-numeric:tabular-nums lining-nums}
+.far-hud b{font-family:var(--f-display);font-size:clamp(56px,min(16vh,20vw),150px);line-height:1;min-width:2.2ch;text-align:center;font-variant-numeric:tabular-nums lining-nums}
 .far-hud b.good{color:var(--good)} .far-hud b.warn{color:var(--warn)} .far-hud b.bad{color:var(--bad)}
-.far-hud span{font-size:min(6vh,48px);font-weight:700;line-height:1.15}
+.far-hud span{font-size:clamp(20px,min(5vh,6vw),46px);font-weight:700;line-height:1.2;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
 .stage.far .banner{font-size:min(4vh,30px);top:3vh;padding:1vh 2vw}
 .stage.far .guide-tag,.stage.far .coach-tag,.stage.far .zone-tag{font-size:min(3vh,22px)}
-.stage.far .holdbar{bottom:22vh}
-.stage.far .holdbar span{font-size:min(3vh,22px)}
+.stage.far .holdbar{left:4vw;right:4vw;bottom:auto;top:calc(100% - 4px - min(22vh,190px));height:6px;border:0}
+.stage.far .holdbar span{display:none}
 .stage.far .rec-btn{display:none}
 .opt-row{display:flex;flex-direction:column;gap:4px;margin-top:6px}
 .opt-row select{width:100%}
@@ -291,3 +291,13 @@ textarea{resize:vertical;min-height:64px}
 .stage.far .banner{display:none!important}
 .ref-hand{margin:0 0 8px;font-size:14px;color:var(--paper-dim)} .ref-hand b{color:var(--gold)}
 .ed-hand{display:flex;gap:8px;flex-wrap:wrap;margin-top:4px}.ed-hand label{display:flex;flex-direction:column;font-size:12px;color:var(--paper-dim);gap:2px}.ed-hand select{font-size:13px;padding:4px 6px}
+
+.holdbar.dim{opacity:.25}
+.stage.far .zone-tag,.stage.far .far-btn{font-size:14px}
+.stage.far .zone-tag{top:auto;bottom:calc(min(22vh,190px) + 14px)}
+.stage.far .coach-tag{top:auto;bottom:calc(min(22vh,190px) + 14px);right:14px;font-size:min(3.2vh,20px)}
+.stage.far .far-hud{min-height:min(22vh,190px)}
+.coach-tag{background:rgba(20,60,38,.88);border-color:rgba(95,214,140,.7);color:#dfffe9;font-weight:700}
+.stage.far .coach-tag{display:none!important}
+/* phone held upright in far view: fill the screen instead of letterboxing (video and drawings stay aligned) */
+@media (orientation:portrait){ .stage.far .mirror-box video,.stage.far .mirror-box canvas{object-fit:cover} }
