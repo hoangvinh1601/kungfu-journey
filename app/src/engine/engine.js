@@ -440,10 +440,10 @@ function drawHands(ctx, H, step){
     const h = HANDS[side]; if(!h || now - h.at > 1200) continue;
     const want = step && step.hand && step.hand[side];
     const col = !want ? 'rgba(241,230,207,.9)' : h.shape === want ? COL.good : COL.bad;
-    ctx.save(); ctx.strokeStyle = col; ctx.fillStyle = col; ctx.lineWidth = Math.max(2, H/320); ctx.lineCap = 'round';
-    ctx.shadowColor = col; ctx.shadowBlur = 6;
-    ctx.beginPath(); HAND_BONES.forEach(([a, b]) => { ctx.moveTo(h.pts[a][0]*H, h.pts[a][1]*H); ctx.lineTo(h.pts[b][0]*H, h.pts[b][1]*H); }); ctx.stroke();
-    [4,8,12,16,20].forEach(i => { ctx.beginPath(); ctx.arc(h.pts[i][0]*H, h.pts[i][1]*H, Math.max(2.5, H/220), 0, 7); ctx.fill(); });
+    ctx.save(); ctx.strokeStyle = col; ctx.fillStyle = col; ctx.lineWidth = Math.max(1.5, H/420); ctx.lineCap = 'round'; ctx.globalAlpha = .8;
+    ctx.shadowColor = col; ctx.shadowBlur = 4;
+    ctx.beginPath(); HAND_BONES.filter(([a, b]) => (b - a === 1 && a % 4 !== 0) || (a === 0 && b === 1) || (b - a === 4 && a >= 5)).forEach(([a, b]) => { ctx.moveTo(h.pts[a][0]*H, h.pts[a][1]*H); ctx.lineTo(h.pts[b][0]*H, h.pts[b][1]*H); }); ctx.stroke();
+    [4,8,12,16,20].forEach(i => { ctx.beginPath(); ctx.arc(h.pts[i][0]*H, h.pts[i][1]*H, Math.max(2, H/300), 0, 7); ctx.fill(); });
     ctx.restore();
   }
 }
@@ -496,6 +496,59 @@ function drawOutline(ctx, W, H, rgb, fillA = 0.06){
   ctx.save(); ctx.imageSmoothingEnabled = true;
   ctx.shadowColor = `rgb(${r},${g2},${b})`; ctx.shadowBlur = Math.max(10, H/45); ctx.filter = 'blur(1.2px)';
   ctx.drawImage(SEG.cv, 0, 0, W, H); ctx.drawImage(SEG.cv, 0, 0, W, H);
+  ctx.restore(); return true;
+}
+
+/* Real body contour from the segmentation mask, split into parts: each mask pixel belongs to the
+   nearest bone (head, torso, upper arm, forearm, thigh, shin). Edges and part borders are drawn in
+   that part's colour, so the outline follows the body exactly and limbs never merge. */
+const PART_SEGS = [
+  { id:'head',  a:'nose', b:'nose', r:.11 },
+  { id:'torso', a:'sh',   b:'hip',  r:.14 },
+  { id:'lShoulder', a:'ls', b:'le', r:.02 }, { id:'lElbow', a:'le', b:'lw', r:.0 },
+  { id:'rShoulder', a:'rs', b:'re', r:.02 }, { id:'rElbow', a:'re', b:'rw', r:.0 },
+  { id:'lHip', a:'lh', b:'lk', r:.03 }, { id:'lKnee', a:'lk', b:'la', r:.01 },
+  { id:'rHip', a:'rh', b:'rk', r:.03 }, { id:'rKnee', a:'rk', b:'ra', r:.01 },
+];
+const RGB_OF = s => s === COL.good ? [95,185,133] : s === COL.warn ? [232,163,61] : s === COL.bad ? [236,91,69] : [241,230,207];
+function drawMaskParts(ctx, W, H, user, colors, calm){
+  if(!SEG.valid || !user) return false;
+  const { gw, gh, grid:G, img } = SEG, d = img.data, asp = W/H;
+  const P2 = k => k === 'sh' ? mid(g(user,'ls'), g(user,'rs')) : k === 'hip' ? mid(g(user,'lh'), g(user,'rh')) : g(user,k);
+  const ok = k => k === 'sh' ? vis(user,'ls') && vis(user,'rs') : k === 'hip' ? vis(user,'lh') || vis(user,'rh') : vis(user,k);
+  const u = torsoLen(user);
+  const segs = PART_SEGS.filter(sg => ok(sg.a) && (sg.a === sg.b || ok(sg.b) || sg.id === 'torso')).map(sg => {
+    const a = P2(sg.a), b = sg.id === 'torso' && !ok('hip') ? [a[0], a[1] + u] : P2(sg.b);
+    const col = sg.id === 'head' ? calm : RGB_OF(colors[sg.id]);
+    return { ax:a[0], ay:a[1], bx:b[0], by:b[1], r:sg.r*u*(sg.id === 'torso' ? 1.6 : 1), col };
+  });
+  if(!segs.length) return false;
+  const part = SEG.part && SEG.part.length === gw*gh ? SEG.part : (SEG.part = new Int8Array(gw*gh));
+  for(let y=0;y<gh;y++) for(let x=0;x<gw;x++){
+    const i = y*gw+x; if(G[i] <= .5){ part[i] = -1; continue; }
+    const px = (x+.5)/gw*asp, py = (y+.5)/gh;
+    let best = 0, bd = 1e9;
+    for(let k=0;k<segs.length;k++){
+      const sg = segs[k], vx = sg.bx-sg.ax, vy = sg.by-sg.ay, l2 = vx*vx + vy*vy;
+      const t = l2 ? Math.max(0, Math.min(1, ((px-sg.ax)*vx + (py-sg.ay)*vy)/l2)) : 0;
+      const dd = Math.hypot(px - sg.ax - t*vx, py - sg.ay - t*vy) - sg.r;
+      if(dd < bd){ bd = dd; best = k; }
+    }
+    part[i] = best;
+  }
+  for(let y=0;y<gh;y++) for(let x=0;x<gw;x++){
+    const i = y*gw+x, o = i*4, p = part[i];
+    if(p < 0){ d[o+3] = 0; continue; }
+    const out = x===0 || y===0 || x===gw-1 || y===gh-1 || part[i-1] < 0 || part[i+1] < 0 || part[i-gw] < 0 || part[i+gw] < 0;
+    // a border between two parts is drawn once, on the side of the part listed later (limbs over torso)
+    const border = !out && ((part[i+1] >= 0 && part[i+1] < p) || (part[i+gw] >= 0 && part[i+gw] < p));
+    const c = segs[p].col; d[o] = c[0]; d[o+1] = c[1]; d[o+2] = c[2];
+    d[o+3] = out ? 255 : border ? 170 : (c === calm ? 10 : 34);
+  }
+  SEG.cv.getContext('2d').putImageData(img, 0, 0);
+  const soft = Math.max(1.5, W/gw*.5);   // hide the mask's pixel steps
+  ctx.save(); ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high'; ctx.filter = `blur(${soft}px)`;
+  ctx.drawImage(SEG.cv, 0, 0, W, H); ctx.drawImage(SEG.cv, 0, 0, W, H); ctx.filter = `blur(${soft*3}px)`; ctx.globalAlpha = .7; ctx.drawImage(SEG.cv, 0, 0, W, H);
   ctx.restore(); return true;
 }
 
@@ -1274,7 +1327,11 @@ function drawUserOverlay(ctx, H, user, state, items){
   });
   let outlined = false;
   if(S.outline === 'silhouette') outlined = drawOutline(ctx, W, H, STATE_RGB[state]);
-  else { drawParts(ctx, H, user, state, colors); outlined = true; }
+  else {
+    const calmRGB = state === 'good' ? [95,185,133] : [241,230,207];
+    outlined = drawMaskParts(ctx, W, H, user, colors, calmRGB);
+    if(!outlined){ drawParts(ctx, H, user, state, colors); outlined = true; }
+  }
   drawHands(ctx, H, lessonById(S.lessonId).steps[S.mode === 'single' ? S.step : Math.max(0, P.guideStep)]);
   if(!outlined || S.showSkel){
     const hip = mid(g(user,'lh'), g(user,'rh')), unit = torsoLen(user)*H;
